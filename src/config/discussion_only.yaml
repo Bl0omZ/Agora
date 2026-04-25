@@ -1,0 +1,40 @@
+# Discussion only mode (no voting)
+# Usage: agent-discussion -c config/discussion_only.yaml -t "your topic"
+
+discussion:
+  enabled: true
+  max_rounds: 8
+
+voting:
+  enabled: false
+
+manager_service_index: 0
+supports_structured_output: true
+
+agents:
+  - name: Optimist
+    description: "An optimistic thinker who sees opportunities."
+    instructions: |
+      You are an optimist. Focus on opportunities, potential, and upside.
+      Always look for reasons why something could work.
+    service_type: openai
+    model: gpt-4o
+    api_key: "${OPENAI_API_KEY}"
+
+  - name: Pessimist
+    description: "A cautious thinker who identifies risks."
+    instructions: |
+      You are a pessimist. Focus on risks, failure modes, and what could go wrong.
+      Always look for reasons why something might fail.
+    service_type: openai
+    model: gpt-4o
+    api_key: "${OPENAI_API_KEY}"
+
+  - name: Realist
+    description: "A pragmatic thinker who balances optimism and caution."
+    instructions: |
+      You are a realist. Balance optimism and caution.
+      Focus on practical constraints, resources, and timelines.
+    service_type: openai
+    model: gpt-4o
+    api_key: "${OPENAI_API_KEY}"

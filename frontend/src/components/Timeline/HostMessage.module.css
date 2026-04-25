@@ -1,0 +1,293 @@
+/* HostMessage —— Timeline 内的 Host 消息（三种 variant）
+ *
+ * 共用骨架（与 MessageBubble.tsx 保持一致）：
+ *   · 32px amber 头像 + author 名 + badge + timestamp
+ *   · 内容区：根据 variant 切换为「文字气泡」/「复杂度卡」/「派发计划卡」
+ *
+ * 与 MessageBubble.module.css 的差异：
+ *   · author 颜色用 var(--moderator-ink)
+ *   · 头像背景固定为 var(--moderator)
+ *   · 结构化卡片紧凑，避免高度突兀
+ */
+
+.host {
+  display: flex;
+  gap: 14px;
+  padding: 18px 0;
+  animation: fadeInUp 0.3s ease-out both;
+}
+
+.host + .host {
+  border-top: 1px solid var(--border-light);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: var(--moderator);
+  color: var(--ink-inverse);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.contentWrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.authorName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--moderator-ink);
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--moderator);
+  color: var(--ink-inverse);
+  letter-spacing: 0.02em;
+}
+
+.variantTag {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--moderator-ink);
+  background: var(--moderator-bg);
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.04em;
+}
+
+.timestamp {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-left: auto;
+}
+
+/* === Variant: normal —— 普通文字气泡 ============================== */
+
+.normalContent {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--ink-primary);
+  text-wrap: pretty;
+}
+
+/* === Variant: complexity —— 复杂度卡片 ============================ */
+
+.complexityCard {
+  background: var(--moderator-soft);
+  border: 1px solid var(--moderator-border);
+  border-radius: var(--radius-medium);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.complexityHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.complexityChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-small);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.complexityChip.low {
+  background: var(--complexity-low-bg);
+  color: var(--complexity-low);
+}
+
+.complexityChip.medium {
+  background: var(--complexity-medium-bg);
+  color: var(--complexity-medium);
+}
+
+.complexityChip.high {
+  background: var(--complexity-high-bg);
+  color: var(--complexity-high);
+}
+
+.complexityDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.complexityCardTitle {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--ink-muted);
+  letter-spacing: 0.04em;
+}
+
+.complexityRationale {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.complexityDimensions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dimensionTag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--radius-small);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  color: var(--ink-secondary);
+  font-family: var(--font-mono);
+}
+
+/* === Variant: dispatch —— 派发计划卡 ============================== */
+
+.dispatchCard {
+  background: var(--moderator-soft);
+  border: 1px solid var(--moderator-border);
+  border-radius: var(--radius-medium);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dispatchHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dispatchTitle {
+  font-size: 13px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--moderator-ink);
+}
+
+.dispatchCount {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--ink-muted);
+}
+
+.refinedTopic {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-small);
+  padding: 8px 10px;
+  line-height: 1.5;
+  font-style: italic;
+  text-wrap: pretty;
+}
+
+.dispatchMeta {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-small);
+  padding: 7px 10px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.refinedTopicLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ink-muted);
+  margin-right: 6px;
+  letter-spacing: 0.04em;
+}
+
+.dispatchList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dispatchTask {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-secondary);
+  line-height: 1.55;
+}
+
+.taskAvatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--ink-inverse);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.taskAgentName {
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin-right: 6px;
+}
+
+.taskArrow {
+  font-family: var(--font-mono);
+  color: var(--ink-muted);
+  margin-right: 6px;
+}
+
+.dispatchRationale {
+  font-size: 11px;
+  color: var(--ink-muted);
+  line-height: 1.5;
+  font-style: italic;
+  padding: 4px 0 0;
+  border-top: 1px dashed var(--border-light);
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}

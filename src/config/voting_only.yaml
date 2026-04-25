@@ -1,0 +1,39 @@
+# Voting only mode (no discussion)
+# Usage: agent-discussion -c config/voting_only.yaml -t "your topic"
+
+discussion:
+  enabled: false
+
+voting:
+  enabled: true
+
+manager_service_index: 0
+supports_structured_output: true
+
+agents:
+  - name: TechnicalLead
+    description: "A technical lead who evaluates technical merit."
+    instructions: |
+      You are a technical lead. Evaluate the proposal on technical merit.
+      Consider: feasibility, complexity, maintainability, and team capability.
+    service_type: openai
+    model: gpt-4o
+    api_key: "${OPENAI_API_KEY}"
+
+  - name: ProductManager
+    description: "A product manager who evaluates business value."
+    instructions: |
+      You are a product manager. Evaluate the proposal on business value.
+      Consider: user impact, ROI, market fit, and strategic alignment.
+    service_type: openai
+    model: gpt-4o
+    api_key: "${OPENAI_API_KEY}"
+
+  - name: SecurityEngineer
+    description: "A security engineer who evaluates security implications."
+    instructions: |
+      You are a security engineer. Evaluate the proposal on security.
+      Consider: attack surface, data protection, compliance, and risk.
+    service_type: openai
+    model: gpt-4o
+    api_key: "${OPENAI_API_KEY}"

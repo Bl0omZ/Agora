@@ -1,0 +1,275 @@
+/* BrainstormPanel —— 议题精炼阶段的底部交互卡片
+ *
+ * 视觉语法（与 VotingCard / InputBar 对齐）：
+ *   · 诚实的 1px border + var(--bg-card) 卡片
+ *   · 主持人侧 amber 头像沿用 var(--moderator)
+ *   · chip 样式与 VotingCard.voteStance 同构（同样的圆角 + 内边距 + 字号）
+ *   · 跳过 link 走 var(--ink-muted)，低权重，不诱导跳过但始终可达
+ *
+ * 反 AI slop self-check：
+ *   ✗ 没有圆角 + 左侧彩色 border accent
+ *   ✗ 没有 emoji 当 icon
+ *   ✗ 没有紫渐变背景
+ *   ✓ 所有色都来自 variables.css token
+ */
+
+.panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-large);
+  margin: 12px 32px 16px;
+  padding: 18px 22px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: fadeInUp 0.25s ease-out both;
+}
+
+/* === Header：进度提示 + 跳过 link =================================== */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progress {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+  letter-spacing: 0.04em;
+}
+
+.progressEmphasis {
+  color: var(--moderator);
+  font-weight: 600;
+}
+
+.skipLink {
+  font-size: 12px;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.skipLink:hover {
+  color: var(--ink-secondary);
+  background: var(--bg-hover);
+}
+
+/* === Question：主持人发问气泡 ====================================== */
+
+.questionRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  background: var(--moderator);
+  color: var(--ink-inverse);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.questionContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.questionMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.authorName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--moderator-ink);
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--moderator);
+  color: var(--ink-inverse);
+  letter-spacing: 0.02em;
+}
+
+.questionText {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-primary);
+  text-wrap: pretty;
+}
+
+/* === Options：候选 chip ============================================ */
+
+.optionsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-left: 40px;
+}
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-medium);
+  background: var(--bg-page);
+  border: 1px solid var(--border-light);
+  font-size: 13px;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+}
+
+.option:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-medium);
+  color: var(--ink-primary);
+}
+
+.option.selected {
+  background: var(--moderator-bg);
+  border-color: var(--moderator-border);
+  color: var(--moderator-ink);
+  font-weight: 500;
+}
+
+.option:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* 选中态左侧的小勾（CSS only，避免 emoji） */
+.checkMark {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--moderator);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.checkMark::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 3px;
+  height: 6px;
+  border: solid var(--ink-inverse);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+/* === Freeform：自由输入框 ========================================== */
+
+.freeformWrap {
+  padding-left: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.freeformLabel {
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.freeformInput {
+  padding: 10px 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-medium);
+  background: var(--bg-input);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ink-primary);
+  resize: vertical;
+  min-height: 56px;
+  line-height: 1.5;
+}
+
+.freeformInput:focus {
+  outline: none;
+  border-color: var(--moderator);
+  background: var(--bg-card);
+}
+
+.freeformInput::placeholder {
+  color: var(--ink-muted);
+}
+
+.freeformInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* === Footer：提交按钮 ============================================== */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-left: 40px;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  margin-right: auto;
+}
+
+.submitButton {
+  padding: 8px 18px;
+  background: var(--accent);
+  color: var(--ink-inverse);
+  border: none;
+  border-radius: var(--radius-medium);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.submitButton:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.submitButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}

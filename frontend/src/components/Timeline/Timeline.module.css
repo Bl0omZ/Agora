@@ -1,0 +1,11 @@
+.timeline {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 32px;
+}
+
+.inner {
+  max-width: 800px;
+  margin: 0 auto;
+  padding-bottom: 24px;
+}

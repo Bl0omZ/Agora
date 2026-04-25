@@ -1,0 +1,61 @@
+.bubble {
+  display: flex;
+  gap: 14px;
+  padding: 18px 0;
+  animation: fadeInUp 0.3s ease-out both;
+}
+
+.bubble + .bubble {
+  border-top: 1px solid var(--border-light);
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--ink-inverse);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.contentWrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.authorName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.timestamp {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-left: auto;
+}
+
+.content {
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--ink-primary);
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}

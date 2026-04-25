@@ -1,0 +1,106 @@
+/* PreviewGallery —— 仅用于开发环境的组件预览页
+ *
+ * 不参与生产构建路由，通过 ?preview=brainstorm URL 触发。
+ * 排版上沿用主 App 的 var(--bg-page) + 32px 横向 padding，让组件在真实容器尺寸下呈现。
+ */
+
+.gallery {
+  background: var(--bg-page);
+  min-height: 100vh;
+  padding: 24px 0 80px;
+}
+
+.galleryHeader {
+  padding: 0 32px 16px;
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: 8px;
+}
+
+.galleryTitle {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin: 0 0 6px;
+}
+
+.gallerySubtitle {
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+}
+
+.section {
+  padding: 28px 0 8px;
+}
+
+.sectionHeader {
+  padding: 0 32px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin: 0;
+}
+
+.sectionDesc {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 24px 0;
+}
+
+.timelineMock {
+  background: var(--bg-card);
+  margin: 0 32px;
+  padding: 8px 24px;
+  border-radius: var(--radius-large);
+  border: 1px solid var(--border-light);
+}
+
+.toggleRow {
+  padding: 0 32px;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toggleButton {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--radius-small);
+  border: 1px solid var(--border-medium);
+  background: var(--bg-card);
+  color: var(--ink-secondary);
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.toggleButton:hover {
+  background: var(--bg-hover);
+  color: var(--ink-primary);
+}
+
+.toggleButton.active {
+  background: var(--moderator-bg);
+  border-color: var(--moderator-border);
+  color: var(--moderator-ink);
+}

@@ -1,0 +1,231 @@
+/* BrainstormStates —— Brainstorm 阶段的空/失败/兜底状态集合
+ *
+ * 包含三类视觉模板，按场景复用：
+ *   1. NoticeBar  —— 信息条，不打断主流程，挂在 Timeline 顶部或底部
+ *      用于：parse_failed / timeout / reconnected
+ *   2. ConfirmModal —— 阻断式 modal，需要用户决策
+ *      用于：skipped（确认是否真的跳过）
+ *   3. LoadingPlaceholder —— 等待主持人响应时的占位
+ *      用于：刚发出 moderator_answer、等待下一轮 question 的间歇
+ *
+ * 反 AI slop self-check：
+ *   ✗ 没有彩色渐变 / glow border / emoji icon
+ *   ✓ 用 ASCII 风的 ⓘ ⚠ ✓ 字符做语义标识（与 huashu §6.3 「不要 emoji 当 icon」对齐）
+ */
+
+/* === NoticeBar ====================================================== */
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 32px;
+  padding: 10px 14px;
+  border-radius: var(--radius-medium);
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+  animation: fadeInUp 0.25s ease-out both;
+}
+
+.notice.info {
+  background: var(--moderator-soft);
+  border-color: var(--moderator-border);
+  color: var(--moderator-ink);
+}
+
+.notice.warn {
+  background: var(--complexity-medium-bg);
+  border-color: var(--complexity-medium);
+  color: #8B6914;
+}
+
+.notice.success {
+  background: var(--complexity-low-bg);
+  border-color: var(--complexity-low);
+  color: var(--complexity-low);
+}
+
+.noticeIcon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  background: currentColor;
+  color: var(--ink-inverse);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.noticeBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.noticeTitle {
+  font-weight: 600;
+  margin-right: 6px;
+}
+
+.noticeText {
+  color: inherit;
+  text-wrap: pretty;
+}
+
+.noticeAction {
+  background: none;
+  border: 1px solid currentColor;
+  color: inherit;
+  padding: 3px 10px;
+  border-radius: var(--radius-small);
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 8px;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease;
+}
+
+.noticeAction:hover {
+  opacity: 0.75;
+}
+
+/* === ConfirmModal =================================================== */
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 25, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out both;
+}
+
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-large);
+  padding: 24px 26px 20px;
+  max-width: 420px;
+  width: calc(100% - 64px);
+  box-shadow: var(--shadow-elevated);
+  animation: modalIn 0.2s ease-out both;
+}
+
+.modalTitle {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin: 0 0 8px;
+}
+
+.modalBody {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  line-height: 1.6;
+  margin-bottom: 18px;
+  text-wrap: pretty;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modalCancel {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-medium);
+  color: var(--ink-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.modalCancel:hover {
+  background: var(--bg-hover);
+}
+
+.modalConfirm {
+  padding: 8px 18px;
+  background: var(--accent);
+  color: var(--ink-inverse);
+  border: none;
+  border-radius: var(--radius-medium);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.modalConfirm:hover {
+  opacity: 0.9;
+}
+
+.modalConfirm.danger {
+  background: var(--complexity-high);
+}
+
+/* === LoadingPlaceholder ============================================ */
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 32px;
+  padding: 14px 16px;
+  border-radius: var(--radius-medium);
+  border: 1px dashed var(--border-medium);
+  background: var(--bg-page);
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.loadingDots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.loadingDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--moderator);
+  animation: pulse 1.4s infinite;
+}
+
+.loadingDot:nth-child(2) { animation-delay: 0.2s; }
+.loadingDot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}

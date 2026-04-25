@@ -1,0 +1,22 @@
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.errorBar {
+  padding: 8px 32px;
+  background: #FFF0F0;
+  color: #C45A5A;
+  font-size: 13px;
+  border-top: 1px solid #FFDDDD;
+  text-align: center;
+}
