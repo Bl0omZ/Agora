@@ -1,0 +1,332 @@
+/* TopicConfirmCard —— 进入 discussion 之前的"议题精炼完成"大卡片
+ *
+ * 视觉语法：
+ *   · 整体沿用 VotingCard 的卡片骨架（同 padding / radius / border）
+ *   · 顶部 amber 色条 = 主持人产物的视觉锚点
+ *   · 复杂度 chip 用 var(--complexity-*) 三色
+ *   · 派发计划 = 任务列表，每条带 agent 头像 + 子议题
+ *   · 底部 CTA：主按钮 var(--accent) 赤土橙「开始讨论 →」+ 次按钮「重新精炼」link 风格
+ *
+ * 反 AI slop self-check：
+ *   ✗ 没有 emoji 当 icon
+ *   ✗ 没有彩色渐变 header
+ *   ✗ 没有圆角 + 左侧 accent border 这种 2020 年 SaaS slop
+ *   ✓ 所有色都来自 token
+ *   ✓ 复杂度三色与 VotingCard 立场色复用，避免造新词汇
+ */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-top: 3px solid var(--moderator);
+  border-radius: var(--radius-large);
+  margin: 16px 32px;
+  padding: 22px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: fadeInUp 0.3s ease-out both;
+  box-shadow: var(--shadow-soft);
+}
+
+/* === Header ======================================================= */
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.titleHint {
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  margin-left: 8px;
+  font-weight: 400;
+}
+
+.refineLink {
+  font-size: 12px;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.refineLink:hover {
+  color: var(--ink-secondary);
+  background: var(--bg-hover);
+}
+
+/* === Topic 对照区 ================================================== */
+
+.topicSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-medium);
+}
+
+.topicBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.topicLabel {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--ink-muted);
+  letter-spacing: 0.04em;
+}
+
+.topicOriginal {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.topicArrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--moderator);
+  text-align: center;
+  letter-spacing: 0.1em;
+  margin: 2px 0;
+}
+
+.topicRefined {
+  font-size: 14px;
+  color: var(--ink-primary);
+  line-height: 1.65;
+  font-weight: 500;
+  text-wrap: pretty;
+}
+
+/* === Complexity ==================================================== */
+
+.complexityRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.sectionLabel {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--ink-muted);
+  letter-spacing: 0.04em;
+  width: 64px;
+  flex-shrink: 0;
+  padding-top: 4px;
+}
+
+.complexityBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.complexityChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-small);
+  font-size: 12px;
+  font-weight: 600;
+  align-self: flex-start;
+}
+
+.complexityChip.low {
+  background: var(--complexity-low-bg);
+  color: var(--complexity-low);
+}
+
+.complexityChip.medium {
+  background: var(--complexity-medium-bg);
+  color: var(--complexity-medium);
+}
+
+.complexityChip.high {
+  background: var(--complexity-high-bg);
+  color: var(--complexity-high);
+}
+
+.complexityDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.complexityRationale {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.complexityDimensions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.dimensionTag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--radius-small);
+  background: var(--bg-page);
+  border: 1px solid var(--border-light);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+}
+
+/* === Dispatch ====================================================== */
+
+.dispatchRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.dispatchBody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dispatchMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  font-family: var(--font-mono);
+}
+
+.dispatchMeta span {
+  padding: 3px 8px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-small);
+}
+
+.dispatchTask {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-medium);
+}
+
+.taskAvatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ink-inverse);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.taskContent {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.taskAgentName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.taskSubTopic {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.taskExpected {
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  margin-top: 2px;
+}
+
+.dispatchRationale {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-style: italic;
+  line-height: 1.5;
+  padding: 0 4px;
+}
+
+/* === Footer CTA =================================================== */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-light);
+}
+
+.ctaPrimary {
+  padding: 10px 22px;
+  background: var(--accent);
+  color: var(--ink-inverse);
+  border: none;
+  border-radius: var(--radius-medium);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.ctaPrimary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.ctaPrimary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

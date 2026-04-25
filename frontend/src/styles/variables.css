@@ -1,0 +1,84 @@
+:root {
+  /* --- Surface --- */
+  --bg-page: #FAF9F7;
+  --bg-sidebar: #F3F2EE;
+  --bg-card: #FFFFFF;
+  --bg-input: #F3F2EE;
+  --bg-hover: #EEECEA;
+  --bg-active: #E8E6E2;
+
+  /* --- Ink --- */
+  --ink-primary: #1A1A19;
+  --ink-secondary: #555550;
+  --ink-muted: #9C9B96;
+  --ink-inverse: #FAFAF9;
+
+  /* --- Border --- */
+  --border-light: #E8E6E2;
+  --border-medium: #DAD8D3;
+
+  /* --- Accent (赤土橙) --- */
+  --accent: #C04A1A;
+  --accent-soft: #F0DDD4;
+  --accent-ink: #8B3514;
+
+  /* --- Role colors --- */
+  --role-host: #B0A090;
+  --role-host-bg: #F5F0EB;
+  --role-host-ink: #6B5D4F;
+  --role-architect: #8BA4B8;
+  --role-architect-bg: #EDF2F7;
+  --role-architect-ink: #3D5A73;
+  --role-pragmatist: #94A87A;
+  --role-pragmatist-bg: #EFF3E8;
+  --role-pragmatist-ink: #4A5A34;
+  --role-challenger: #C4A462;
+  --role-challenger-bg: #F7F1E3;
+  --role-challenger-ink: #7A6320;
+  --role-synthesizer: #9B8EB0;
+  --role-synthesizer-bg: #F0ECF5;
+  --role-synthesizer-ink: #5A4970;
+
+  /* --- Moderator (amber) ---
+     Brainstorming 阶段的"主持人调度"专属配色。
+     色相与 VotingCard neutral (#F57F17) 同族，明度更柔，避免与三色立场相冲。
+     用于 AgentStatusPanel.moderator、HostMessage 头像/badge、TopicConfirm 卡片。 */
+  --moderator: #B7791F;
+  --moderator-bg: #FEF3C7;
+  --moderator-soft: #FFFBEB;
+  --moderator-border: #FCD34D;
+  --moderator-ink: #78350F;
+
+  /* --- Complexity levels ---
+     沿用 VotingCard 三色立场体系：low=approve、medium=neutral、high=oppose。
+     避免再造一套色系，让用户视觉记忆复用。 */
+  --complexity-low: #2E7D32;
+  --complexity-low-bg: #E8F5E9;
+  --complexity-medium: #F57F17;
+  --complexity-medium-bg: #FFF8E1;
+  --complexity-high: #C62828;
+  --complexity-high-bg: #FFEBEE;
+
+  /* --- Typography --- */
+  --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+  /* --- Spacing --- */
+  --radius-small: 3px;
+  --radius-medium: 6px;
+  --radius-large: 10px;
+
+  /* --- Shadow --- */
+  --shadow-soft: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-medium: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-elevated: 0 8px 24px rgba(0,0,0,0.08);
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-primary);
+  background: var(--bg-page);
+}

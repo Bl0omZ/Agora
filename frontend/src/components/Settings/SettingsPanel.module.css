@@ -1,0 +1,130 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.panel {
+  background: var(--bg-card);
+  border-radius: var(--radius-large);
+  box-shadow: var(--shadow-elevated);
+  width: 400px;
+  max-width: 90vw;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: var(--ink-muted);
+  padding: 4px;
+}
+
+.closeButton:hover { color: var(--ink-primary); }
+
+.body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-secondary);
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.slider {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.sliderValue {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 24px;
+  text-align: center;
+}
+
+.input {
+  padding: 8px 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-small);
+  background: var(--bg-input);
+  font-size: 13px;
+  color: var(--ink-primary);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-light);
+}
+
+.cancelButton {
+  padding: 6px 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-small);
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+
+.applyButton {
+  padding: 6px 16px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-small);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-inverse);
+}
+
+.applyButton:hover { opacity: 0.9; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

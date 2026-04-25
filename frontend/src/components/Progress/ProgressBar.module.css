@@ -1,0 +1,67 @@
+.progressBar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 12px 32px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  position: relative;
+}
+
+.stepDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-medium);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.stepDot.completed { background: var(--accent); }
+.stepDot.active {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  animation: stepPulse 2s infinite;
+}
+
+.stepLabel {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-weight: 400;
+  transition: color 0.3s ease;
+  white-space: nowrap;
+}
+
+.stepLabel.completed { color: var(--ink-secondary); }
+.stepLabel.active {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.stepConnector {
+  flex: 1;
+  height: 1px;
+  background: var(--border-light);
+  margin: 0 4px;
+}
+
+.stepConnector.completed { background: var(--accent-soft); }
+
+.roundCounter {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  margin-left: 4px;
+}
+
+@keyframes stepPulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent-soft); }
+  50% { box-shadow: 0 0 0 5px var(--accent-soft); }
+}
