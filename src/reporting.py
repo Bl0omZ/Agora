@@ -112,4 +112,4 @@ def _slugify(topic: str) -> str:
     """Create a filesystem-friendly file stem."""
     normalized = re.sub(r"[^\w\u4e00-\u9fff-]+", "-", topic.strip(), flags=re.UNICODE)
     normalized = re.sub(r"-{2,}", "-", normalized).strip("-")
-    return (normalized or "discussion-report")[:80]
+    return (normalized or "discussion-report")[:30]

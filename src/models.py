@@ -27,6 +27,7 @@ class AgentConfig(BaseModel):
     endpoint: str | None = Field(None, description="Azure OpenAI endpoint. Supports ${ENV_VAR} syntax.")
     api_version: str | None = Field("2024-12-01-preview", description="Azure OpenAI API version.")
     final_only: bool = Field(False, description="If true, this agent only speaks at the end (e.g. synthesizer).")
+    request_timeout: float = Field(240.0, description="Per-request timeout in seconds for this agent's LLM calls.")
 
 
 class DiscussionConfig(BaseModel):
@@ -65,22 +66,48 @@ class BrainstormConfig(BaseModel):
     """Configuration for the moderator brainstorm (topic refinement) phase."""
 
     enabled: bool = True
-    max_rounds: int = Field(5, description="主持人最多问几轮（兜底，配合用户跳过按钮）")
+    max_rounds: int = Field(10, description="主持人最多问几轮（兜底，配合用户跳过按钮）")
     answer_timeout_seconds: int = Field(300, description="用户回答超时时间（秒），超时按 skip 处理")
     system_prompt: str = (
-        "You are a discussion moderator. Before the panel discussion starts, "
-        "your job is to refine the user's topic into a precise, well-scoped question.\n"
-        "Ask ONE clarifying question at a time. Output JSON: "
-        '{"action": "ask" | "finalize", '
+        "You are a moderator running a lightweight requirements interview before a multi-agent discussion.\n"
+        "Your goal is to turn the user's raw topic into an execution-ready discussion brief. "
+        "Do not rush to finalize. First collect enough context so later agents can give specific, "
+        "grounded advice instead of generic suggestions.\n\n"
+        "Ask ONE question at a time.\n\n"
+        "Question strategy:\n"
+        "1. Start with the weakest missing dimension.\n"
+        "2. Prefer concrete, answerable questions.\n"
+        "3. Prefer multiple-choice options when useful, but allow freeform answers.\n"
+        "4. If the user gives a vague answer, ask for a number, example, constraint, tradeoff, or failure case.\n"
+        "5. Do not ask for information already present in the conversation.\n"
+        "6. Do not overfit to one domain. Infer the domain from the user's topic, but keep the clarification framework generic.\n\n"
+        "Clarify these dimensions before action=finalize when relevant:\n"
+        "- Current state: what already exists, what process/tool/system is currently used.\n"
+        "- Desired outcome: what the user wants to decide, produce, or improve.\n"
+        "- Pain point: what is failing, too slow, too noisy, too expensive, or unclear.\n"
+        "- Scale: volume, frequency, backlog, latency, cost, team size, or other concrete magnitude.\n"
+        "- Evidence gap: what information is missing to judge correctness, risk, quality, or feasibility.\n"
+        "- Constraints: technical, organizational, time, cost, permission, or integration limits.\n"
+        "- Non-goals: what should stay out of scope for the first discussion.\n"
+        "- Decision boundaries: what the agents may decide, and what must remain for the user.\n"
+        "- Success criteria: how the user will judge that the final answer is useful.\n\n"
+        "Finalize only when the discussion brief contains the current situation, the main pain point, "
+        "at least one concrete scale or example when available, key constraints or non-goals, "
+        "and the expected final output shape.\n\n"
+        "When more clarification is needed, output JSON only: "
+        '{"action": "ask", '
         '"question": "...", '
         '"options": [{"id": "short_id", "label": "choice"}], '
         '"allow_multiple": false, '
-        '"allow_freeform": true, '
-        '"refined_topic": "..." (only when action=finalize), '
-        '"context_summary": "..." (only when action=finalize), '
-        '"complexity": {"level": "low|medium|high", "rationale": "...", "dimensions": ["..."]} (only when action=finalize), '
-        '"dispatch_plan": {"execution_mode": "direct|focused|panel", "tasks": [{"agent_name": "AgentName", "sub_topic": "...", "expected_output": "..."}], "expected_final_output": "...", "rationale": "..."} (only when action=finalize)}'
+        '"allow_freeform": true}\n\n'
+        "When finalizing, output JSON only: "
+        '{"action": "finalize", '
+        '"refined_topic": "...", '
+        '"context_summary": "...", '
+        '"complexity": {"level": "low|medium|high", "rationale": "...", "dimensions": ["..."]}, '
+        '"dispatch_plan": {"execution_mode": "direct|focused|panel", "tasks": [{"agent_name": "AgentName", "sub_topic": "...", "expected_output": "..."}], "expected_final_output": "...", "rationale": "..."}}'
     )
+
 
 class AppConfig(BaseModel):
     """Top-level application configuration."""

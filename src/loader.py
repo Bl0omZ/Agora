@@ -46,15 +46,18 @@ def _load_local_env(config_path: str) -> None:
 
 
 def resolve_env_vars(value: str | None) -> str | None:
-    """Resolve ${ENV_VAR} references in a string."""
+    """Resolve ${ENV_VAR} and ${ENV_VAR:-default} references in a string."""
     if value is None:
         return None
-    pattern = r"\$\{(\w+)\}"
+    pattern = r"\$\{(\w+)(?::-(.*?))?\}"
 
-    def replacer(match: re.Match) -> str:
+    def replacer(match: re.Match[str]) -> str:
         env_key = match.group(1)
+        default = match.group(2)
         env_val = os.environ.get(env_key)
         if env_val is None:
+            if default is not None:
+                return default
             raise ValueError(f"Environment variable '{env_key}' is not set. Required by config.")
         return env_val
 
@@ -97,12 +100,15 @@ def create_service(config: AgentConfig) -> ChatCompletionClientBase:
             api_version=config.api_version or "2024-12-01-preview",
         )
 
+    per_request_timeout = config.request_timeout
+
     if config.service_type == ServiceType.OPENAI_SSE_PROXY:
         if not resolved_base_url:
             raise ValueError("openai_sse_proxy requires base_url")
         async_client = SSEProxyAsyncOpenAI(
             api_key=resolved_api_key or "",
             base_url=resolved_base_url,
+            timeout=per_request_timeout,
         )
         return OpenAIChatCompletion(
             ai_model_id=config.model,
@@ -112,21 +118,26 @@ def create_service(config: AgentConfig) -> ChatCompletionClientBase:
     # OpenAI or OpenAI-compatible endpoint
     # Key: OpenAIChatCompletion doesn't accept base_url directly.
     # Must pass via async_client=AsyncOpenAI(base_url=...)
-    if resolved_base_url:
-        from openai import AsyncOpenAI
+    from openai import AsyncOpenAI
 
+    if resolved_base_url:
         async_client = AsyncOpenAI(
             api_key=resolved_api_key,
             base_url=resolved_base_url,
+            timeout=per_request_timeout,
         )
         return OpenAIChatCompletion(
             ai_model_id=config.model,
             async_client=async_client,
         )
 
+    async_client = AsyncOpenAI(
+        api_key=resolved_api_key,
+        timeout=per_request_timeout,
+    )
     return OpenAIChatCompletion(
         ai_model_id=config.model,
-        api_key=resolved_api_key,
+        async_client=async_client,
     )
 
 
