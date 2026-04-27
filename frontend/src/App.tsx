@@ -217,6 +217,13 @@ function MainApp() {
 
   // Find thinking agent
   const thinkingAgent = Object.values(ws.agentStates).find(a => a.status === 'thinking')?.name ?? null;
+  const showCompletionGuide = (
+    isActive &&
+    !isViewingHistory &&
+    ws.isReady &&
+    !ws.error &&
+    ws.votingResult !== null
+  );
 
   return (
     <div className={styles.layout}>
@@ -302,10 +309,20 @@ function MainApp() {
               )}
 
             {isActive && !isViewingHistory && ws.isReady && (
-              <InputBar
-                onSend={handleFollowup}
-                placeholder="输入追问内容…"
-              />
+              <>
+                {showCompletionGuide && (
+                  <div className={styles.completionGuide}>
+                    <strong>{ws.savedPath ? '方案已保存' : '方案已完成'}</strong>
+                    <span>
+                      认可方案可使用保存或导出按钮；需要调整时，在下方输入追问，系统会继续组织多 Agent 讨论。
+                    </span>
+                  </div>
+                )}
+                <InputBar
+                  onSend={handleFollowup}
+                  placeholder="输入追问或修改意见…"
+                />
+              </>
             )}
 
             {isViewingHistory && (

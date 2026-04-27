@@ -10,6 +10,7 @@ BACKEND_SCRIPT="$ROOT_DIR/run_web.py"
 BACKEND_PID=""
 FRONTEND_PID=""
 CLEANUP_EXIT_CODE=0
+BACKEND_PYTHON=""
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -48,6 +49,37 @@ if [ -f "$ROOT_DIR/.env" ]; then
   set +a
 fi
 
+python_has_backend_deps() {
+  "$1" - <<'PY' >/dev/null 2>&1
+import fastapi
+import semantic_kernel
+import uvicorn
+PY
+}
+
+select_backend_python() {
+  if [ -n "${AGENT_DISCUSSION_PYTHON:-}" ]; then
+    if python_has_backend_deps "$AGENT_DISCUSSION_PYTHON"; then
+      BACKEND_PYTHON="$AGENT_DISCUSSION_PYTHON"
+      return
+    fi
+    fail "指定的 AGENT_DISCUSSION_PYTHON 缺少后端依赖，请确认已安装 fastapi / semantic-kernel / uvicorn。"
+  fi
+
+  for candidate in \
+    "$ROOT_DIR/.venv/bin/python3" \
+    "$ROOT_DIR/.venv/bin/python" \
+    "python3.11" \
+    "python3"; do
+    if command -v "$candidate" >/dev/null 2>&1 && python_has_backend_deps "$candidate"; then
+      BACKEND_PYTHON="$candidate"
+      return
+    fi
+  done
+
+  fail "未找到可运行后端的 Python。请先安装依赖，或用 AGENT_DISCUSSION_PYTHON=/path/to/python ./start.sh 指定解释器。"
+}
+
 # --- 检查前端依赖 ---
 if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
   echo -e "${CYAN}首次运行，安装前端依赖…${NC}"
@@ -60,8 +92,10 @@ echo -e "${CYAN}启动后端 (http://localhost:8001)…${NC}"
 cd "$ROOT_DIR"
 export PYTHONUNBUFFERED=1
 export AGENT_DISCUSSION_LOG_LEVEL="${AGENT_DISCUSSION_LOG_LEVEL:-INFO}"
+select_backend_python
 echo -e "  后端日志级别: ${AGENT_DISCUSSION_LOG_LEVEL}"
-python3 -u "$BACKEND_SCRIPT" &
+echo -e "  Python: $("${BACKEND_PYTHON}" -c 'import sys; print(sys.executable)')"
+"$BACKEND_PYTHON" -u "$BACKEND_SCRIPT" &
 BACKEND_PID=$!
 
 # 等后端真正就绪（最多 15 秒）
