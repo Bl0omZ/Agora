@@ -20,3 +20,24 @@
   border-top: 1px solid #FFDDDD;
   text-align: center;
 }
+
+.completionGuide {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 32px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-light);
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+.completionGuide strong {
+  color: var(--ink-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.completionGuide span {
+  min-width: 0;
+}
