@@ -233,6 +233,22 @@ def test_parse_vote_strips_think_blocks_from_reason():
     assert vote.reason == "建议先小范围验证"
 
 
+def test_brainstorm_defaults_use_general_interview_gates():
+    config = BrainstormConfig()
+
+    assert config.max_rounds == 10
+    prompt = config.system_prompt
+    assert "Ask ONE question at a time" in prompt
+    assert "Do not overfit to one domain" in prompt
+    assert "Current state" in prompt
+    assert "Evidence gap" in prompt
+    assert "Non-goals" in prompt
+    assert "Decision boundaries" in prompt
+    assert "Success criteria" in prompt
+    assert "Finalize only when" in prompt
+    assert "PR" not in prompt
+
+
 def test_dispatch_state_filters_to_real_discussion_agents():
     from src import web_server
 
@@ -724,6 +740,80 @@ def test_brainstorm_finalize_keeps_complexity_and_dispatch_plan():
 
     assert result["complexity"]["level"] == "medium"
     assert result["dispatch_plan"]["tasks"][0]["agent_name"] == "Architect"
+
+
+def test_brainstorm_finalize_requires_structured_complexity_and_dispatch_plan():
+    payload = json.dumps(
+        {
+            "action": "finalize",
+            "refined_topic": "精炼后的议题",
+            "context_summary": "上下文摘要",
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(ValueError, match="complexity"):
+        BrainstormSession._parse_llm_json(payload)
+
+
+def test_brainstorm_force_finalize_returns_structured_complexity():
+    session = BrainstormSession(
+        config=BrainstormConfig(),
+        kernel=SimpleNamespace(),
+        service_id="test",
+        on_question=lambda _payload: asyncio.Future(),
+    )
+
+    result = session._force_finalize("原议题", reason="parse_error")
+
+    assert result["complexity"]["level"] == "medium"
+    assert "解析" in result["complexity"]["rationale"]
+
+
+@pytest.mark.asyncio
+async def test_brainstorm_retry_adds_schema_repair_hint():
+    class FakeBrainstormService:
+        def __init__(self):
+            self.calls: list[list[str]] = []
+
+        async def get_chat_message_content(self, chat_history, settings):
+            self.calls.append([message.content or "" for message in chat_history.messages])
+            if len(self.calls) == 1:
+                return ChatMessageContent(
+                    role=AuthorRole.ASSISTANT,
+                    content='{"action":"finalize","refined_topic":"精炼议题"}',
+                )
+            return ChatMessageContent(
+                role=AuthorRole.ASSISTANT,
+                content=json.dumps(
+                    {
+                        "action": "finalize",
+                        "refined_topic": "精炼议题",
+                        "context_summary": "摘要",
+                        "complexity": {"level": "medium", "rationale": "需要结构化输出", "dimensions": []},
+                        "dispatch_plan": {
+                            "execution_mode": "panel",
+                            "tasks": [],
+                            "expected_final_output": "字段清单",
+                            "rationale": "需要讨论",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+
+    session = BrainstormSession(
+        config=BrainstormConfig(),
+        kernel=SimpleNamespace(),
+        service_id="test",
+        on_question=lambda _payload: asyncio.Future(),
+    )
+    service = FakeBrainstormService()
+
+    result = await session._invoke_llm(service, "原议题", force_finalize=False)
+
+    assert result["complexity"]["level"] == "medium"
+    assert any("Previous brainstorm output was invalid" in message for message in service.calls[1])
 
 
 @pytest.mark.asyncio

@@ -43,7 +43,7 @@ pip install -e /Users/lvzhibo/Downloads/semantic-kernel-main/python
 
 > 安装完成后，`agent-discussion`（CLI）和 `agent-discussion-web`（Web 后端）两个命令会全局可用。
 
-默认配置使用环境变量读取 key。可复制 `.env.example` 为 `.env`，填入本地代理和兼容模型服务的 key。
+默认配置使用环境变量读取 key。可复制 `.env.example` 为 `.env`，填入兼容模型服务的 key；本地 SSE 代理 key 可留空。
 
 ## Quick Start
 
@@ -134,11 +134,11 @@ voting:
 
 brainstorm:
   enabled: true
-  max_rounds: 5
+  max_rounds: 10
   answer_timeout_seconds: 300
 ```
 
-环境变量插值用 `${VAR_NAME}` 语法，自动从 `os.environ` 读取。
+环境变量插值用 `${VAR_NAME}` 语法，自动从 `os.environ` 读取；可用 `${VAR_NAME:-}` 表示缺失时使用空值。
 
 ## Architecture
 
@@ -211,7 +211,7 @@ voting:
 
 brainstorm:
   enabled: true       # 关闭则直接进入 discussion
-  max_rounds: 5
+  max_rounds: 10      # 主持人最多追问轮数
 ```
 
 ### 结构化输出回退

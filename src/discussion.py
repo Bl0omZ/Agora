@@ -162,14 +162,19 @@ class LLMGroupChatManager(GroupChatManager):
             response = await self.service.get_chat_message_content(
                 chat_history, settings=PromptExecutionSettings(response_format=BooleanResult)
             )
-            assert response is not None
-            return BooleanResult.model_validate_json(response.content)
+            content = (response.content if response else "") or ""
+            if content:
+                try:
+                    return BooleanResult.model_validate_json(content)
+                except Exception:
+                    logger.warning("should_terminate: structured parse failed, falling back to text parse")
+            return self._parse_boolean_result(content)
         else:
             response = await self.service.get_chat_message_content(
                 chat_history, settings=self._default_settings()
             )
-            assert response is not None
-            return self._parse_boolean_result(response.content)
+            content = (response.content if response else "") or ""
+            return self._parse_boolean_result(content)
 
     async def select_next_agent(
         self, chat_history: ChatHistory, participant_descriptions: dict[str, str]
@@ -197,18 +202,29 @@ class LLMGroupChatManager(GroupChatManager):
         )
 
         for attempt in range(3):
-            if self.supports_structured_output:
-                response = await self.service.get_chat_message_content(
-                    chat_history, settings=PromptExecutionSettings(response_format=StringResult)
-                )
-                assert response is not None
-                result = StringResult.model_validate_json(response.content)
-            else:
-                response = await self.service.get_chat_message_content(
-                    chat_history, settings=self._default_settings()
-                )
-                assert response is not None
-                result = self._parse_string_result(response.content)
+            try:
+                if self.supports_structured_output:
+                    response = await self.service.get_chat_message_content(
+                        chat_history, settings=PromptExecutionSettings(response_format=StringResult)
+                    )
+                    content = (response.content if response else "") or ""
+                    if content:
+                        try:
+                            result = StringResult.model_validate_json(content)
+                        except Exception:
+                            logger.warning("select_next_agent: structured parse failed attempt %d, falling back", attempt + 1)
+                            result = self._parse_string_result(content)
+                    else:
+                        result = self._parse_string_result(content)
+                else:
+                    response = await self.service.get_chat_message_content(
+                        chat_history, settings=self._default_settings()
+                    )
+                    content = (response.content if response else "") or ""
+                    result = self._parse_string_result(content)
+            except Exception:
+                logger.warning("select_next_agent: LLM call failed attempt %d/3", attempt + 1)
+                continue
 
             if result.result in participant_descriptions:
                 logger.info(
@@ -259,14 +275,22 @@ class LLMGroupChatManager(GroupChatManager):
             response = await self.service.get_chat_message_content(
                 chat_history, settings=PromptExecutionSettings(response_format=StringResult)
             )
-            assert response is not None
-            result = StringResult.model_validate_json(response.content)
+            content = (response.content if response else "") or ""
+            if content:
+                try:
+                    result = StringResult.model_validate_json(content)
+                except Exception:
+                    logger.warning("filter_results: structured parse failed, falling back to text parse")
+                    result = self._parse_string_result(content)
+            else:
+                logger.warning("filter_results: LLM returned empty response, using transcript fallback")
+                result = StringResult(result=build_discussion_transcript(chat_history), reason="Empty LLM response fallback")
         else:
             response = await self.service.get_chat_message_content(
                 chat_history, settings=self._default_settings()
             )
-            assert response is not None
-            result = self._parse_string_result(response.content)
+            content = (response.content if response else "") or ""
+            result = self._parse_string_result(content)
 
         return MessageResult(
             result=ChatMessageContent(role=AuthorRole.ASSISTANT, name=self.facilitator_name, content=result.result),
@@ -428,7 +452,7 @@ async def _run_managed_group_chat(
     try:
         logger.info("discussion.invoke runtime_started=true")
         result = await orchestration.invoke(task=history.messages[:], runtime=runtime)
-        summary_message = await result.get(timeout=180)
+        summary_message = await result.get(timeout=900)
     except TimeoutError:
         force_stop_runtime = True
         fallback_summary = build_discussion_transcript(history)

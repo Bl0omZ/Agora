@@ -43,7 +43,7 @@ pending_topic_confirmations: dict[str, asyncio.Future] = {}
 
 
 # Path-traversal hardening: only allow alphanumerics, dot, underscore, dash.
-_SAFE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]+$")
+_SAFE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9一-鿿._-]+$")
 
 
 def _safe_resolve(base_dir: Path, user_input: str, expected_suffix: str | None = None) -> Path:
@@ -949,7 +949,13 @@ async def _run_discussion_phase(
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     config_path = _default_config_path()
-    app_config = load_config(config_path)
+    try:
+        app_config = load_config(config_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to load config: %s", exc)
+        await _send_json(websocket, {"type": "error", "message": str(exc)})
+        await websocket.close(code=1011)
+        return
     session: SessionState | None = None
     pipeline_task: asyncio.Task | None = None
 

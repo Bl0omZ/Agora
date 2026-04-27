@@ -38,6 +38,13 @@ logger = logging.getLogger(__name__)
 _REFINED_TOPIC_MAX_CHARS = 300
 # Number of extra parse attempts after the initial one (per AC3.2 — "retry 1 time").
 _JSON_RETRY_ATTEMPTS = 1
+_FINALIZE_SCHEMA_REMINDER = (
+    "\n\nFinalize output is invalid unless it includes all of these fields: "
+    "refined_topic, context_summary, complexity, dispatch_plan. "
+    "complexity must be an object with level (low|medium|high), rationale, and dimensions. "
+    "dispatch_plan must be an object with execution_mode (direct|focused|panel), "
+    "tasks, expected_final_output, and rationale."
+)
 
 
 class SkipBrainstormException(Exception):
@@ -235,6 +242,8 @@ class BrainstormSession:
                     "Empty LLM response on attempt %d/%d",
                     attempt + 1, _JSON_RETRY_ATTEMPTS + 1,
                 )
+                if attempt < _JSON_RETRY_ATTEMPTS:
+                    self._add_repair_hint(chat_history, str(last_error))
                 continue
 
             try:
@@ -245,12 +254,27 @@ class BrainstormSession:
                     "JSON parse failed on attempt %d/%d: %s | raw=%r",
                     attempt + 1, _JSON_RETRY_ATTEMPTS + 1, exc, response.content,
                 )
+                if attempt < _JSON_RETRY_ATTEMPTS:
+                    self._add_repair_hint(chat_history, str(exc))
                 continue
 
             return parsed
 
         raise _BrainstormParseError(
             f"Failed to parse LLM JSON after {_JSON_RETRY_ATTEMPTS + 1} attempts: {last_error}"
+        )
+
+    @staticmethod
+    def _add_repair_hint(chat_history: ChatHistory, error: str) -> None:
+        chat_history.add_message(
+            ChatMessageContent(
+                role=AuthorRole.USER,
+                content=(
+                    f"Previous brainstorm output was invalid: {error}. "
+                    "Return only a valid JSON object. "
+                    + _FINALIZE_SCHEMA_REMINDER.strip()
+                ),
+            )
         )
 
     def _build_chat_history(self, original_topic: str, force_finalize: bool) -> ChatHistory:
@@ -262,6 +286,7 @@ class BrainstormSession:
             system_prompt = (
                 system_prompt
                 + "\n\nThis is the last round, you MUST output action=finalize now."
+                + _FINALIZE_SCHEMA_REMINDER
             )
         chat_history.add_message(
             ChatMessageContent(role=AuthorRole.SYSTEM, content=system_prompt)
@@ -310,8 +335,31 @@ class BrainstormSession:
         action = payload["action"]
         if action not in ("ask", "finalize"):
             raise ValueError(f"Unknown action={action!r}")
+        if action == "finalize":
+            BrainstormSession._validate_finalize_payload(payload)
 
         return payload
+
+    @staticmethod
+    def _validate_finalize_payload(payload: dict[str, Any]) -> None:
+        """Validate fields that downstream dispatch depends on."""
+        complexity = payload.get("complexity")
+        if not isinstance(complexity, dict):
+            raise ValueError("finalize missing structured complexity")
+        level = str(complexity.get("level") or "").lower()
+        if level not in {"low", "medium", "high"}:
+            raise ValueError("finalize complexity.level must be low, medium, or high")
+        if not str(complexity.get("rationale") or "").strip():
+            raise ValueError("finalize complexity.rationale is required")
+
+        dispatch_plan = payload.get("dispatch_plan")
+        if not isinstance(dispatch_plan, dict):
+            raise ValueError("finalize missing dispatch_plan")
+        execution_mode = str(dispatch_plan.get("execution_mode") or "").lower()
+        if execution_mode not in {"direct", "focused", "panel"}:
+            raise ValueError("finalize dispatch_plan.execution_mode must be direct, focused, or panel")
+        if not isinstance(dispatch_plan.get("tasks"), list):
+            raise ValueError("finalize dispatch_plan.tasks must be a list")
 
     async def _handle_ask(self, parsed: dict[str, Any], round_idx: int) -> None:
         """Forward the moderator's question to the UI and wait for an answer.
@@ -419,9 +467,23 @@ class BrainstormSession:
             "refined_topic": self._truncate_topic(original_topic),
             "context_summary": "",
             "history": list(self.history),
-            "complexity": None,
+            "complexity": self._fallback_complexity(reason),
             "dispatch_plan": None,
             "fallback_reason": reason,
+        }
+
+    @staticmethod
+    def _fallback_complexity(reason: str) -> dict[str, Any]:
+        reason_text = {
+            "user_skip": "用户跳过议题精炼",
+            "parse_error": "主持人输出解析失败",
+            "unknown_action": "主持人输出了未知动作",
+            "loop_exhausted": "主持人未在限定轮次内完成精炼",
+        }.get(reason, "主持人未完成结构化精炼")
+        return {
+            "level": "medium",
+            "rationale": f"{reason_text}，已按普通讨论处理。",
+            "dimensions": [],
         }
 
     @staticmethod
