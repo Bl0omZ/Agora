@@ -9,6 +9,11 @@ venv/
 .env.*
 !.env.example
 
+# Local LLM config with real keys. Keep src/config/agent.yaml.example tracked.
+src/config/agent.yaml
+src/config/*.local.yaml
+src/config/*.private.yaml
+
 .omx/
 .omc/
 .claude/

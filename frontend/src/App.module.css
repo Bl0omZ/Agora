@@ -12,6 +12,40 @@
   min-width: 0;
 }
 
+.topicStrip {
+  flex-shrink: 0;
+  padding: 14px 32px 16px;
+  background: var(--bg-page);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.topicStripInner {
+  max-width: 800px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.topicLabel {
+  padding-top: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  white-space: nowrap;
+}
+
+.topicText {
+  margin: 0;
+  color: var(--ink-primary);
+  font-size: 16px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
 .errorBar {
   padding: 8px 32px;
   background: #FFF0F0;
@@ -40,4 +74,19 @@
 
 .completionGuide span {
   min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .topicStrip {
+    padding: 12px 18px 14px;
+  }
+
+  .topicStripInner {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .topicLabel {
+    padding-top: 0;
+  }
 }

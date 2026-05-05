@@ -1,5 +1,11 @@
 import { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react';
-import type { ReportEntry, DiscussionConfig, SessionData, BlueprintExportFormat } from './types';
+import type {
+  ReportEntry,
+  DiscussionConfig,
+  SessionData,
+  BlueprintExportFormat,
+  SessionIndexEntry,
+} from './types';
 import { SCHEMA_VERSION } from './constants';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSession } from './hooks/useSession';
@@ -21,6 +27,7 @@ import { Welcome } from './components/Welcome/Welcome';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { ReportViewer } from './components/Report/ReportViewer';
 import { LeaveConfirm } from './components/LeaveConfirm/LeaveConfirm';
+import { SessionDeleteConfirm } from './components/SessionDeleteConfirm/SessionDeleteConfirm';
 import { BrainstormPanel } from './components/Brainstorm/BrainstormPanel';
 import {
   BrainstormLoadingPlaceholder,
@@ -33,8 +40,7 @@ import styles from './App.module.css';
 
 type PendingAction =
   | { kind: 'select'; sessionId: string }
-  | { kind: 'new' }
-  | { kind: 'delete'; sessionId: string };
+  | { kind: 'new' };
 
 const PreviewGallery = lazy(() =>
   import('./components/Brainstorm/PreviewGallery').then(module => ({
@@ -74,6 +80,8 @@ function MainApp() {
   const [config, setConfig] = useState<DiscussionConfig>({ maxRounds: 3, model: null });
   const [historyData, setHistoryData] = useState<SessionData | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [deleteCandidate, setDeleteCandidate] = useState<SessionIndexEntry | null>(null);
+  const [isDeletingSession, setIsDeletingSession] = useState(false);
   const [showBrainstormSkipConfirm, setShowBrainstormSkipConfirm] = useState(false);
 
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -207,20 +215,16 @@ function MainApp() {
     } else if (action.kind === 'new') {
       session.startNewSession();
       setHistoryData(null);
-    } else if (action.kind === 'delete') {
-      session.deleteSession(action.sessionId);
     }
   }, [session]);
 
   const requestAction = useCallback((action: PendingAction) => {
-    // Delete-current always asks; others only ask when unsaved work exists.
-    const isDeletingCurrent = action.kind === 'delete' && action.sessionId === session.currentSessionId;
-    if (hasUnsavedWork || isDeletingCurrent) {
+    if (hasUnsavedWork) {
       setPendingAction(action);
     } else {
       performAction(action);
     }
-  }, [hasUnsavedWork, session.currentSessionId, performAction]);
+  }, [hasUnsavedWork, performAction]);
 
   const handleSelectSession = useCallback((id: string) => {
     if (id === session.currentSessionId) return;
@@ -232,8 +236,24 @@ function MainApp() {
   }, [requestAction]);
 
   const handleDeleteSession = useCallback((id: string) => {
-    requestAction({ kind: 'delete', sessionId: id });
-  }, [requestAction]);
+    const target = session.sessions.find(item => item.id === id);
+    if (target) setDeleteCandidate(target);
+  }, [session.sessions]);
+
+  const handleConfirmDeleteSession = useCallback(async () => {
+    if (!deleteCandidate) return;
+    setIsDeletingSession(true);
+    await session.deleteSession(deleteCandidate.id);
+    if (historyData?.id === deleteCandidate.id) {
+      setHistoryData(null);
+    }
+    setIsDeletingSession(false);
+    setDeleteCandidate(null);
+  }, [deleteCandidate, historyData?.id, session]);
+
+  const handleCancelDeleteSession = useCallback(() => {
+    if (!isDeletingSession) setDeleteCandidate(null);
+  }, [isDeletingSession]);
 
   // --- Confirm dialog handlers ---
   const handleConfirmSaveAndLeave = useCallback(async () => {
@@ -297,7 +317,6 @@ function MainApp() {
         ) : (
           <>
             <TopBar
-              topic={displayTopic}
               connectionStatus={ws.connectionStatus}
               isReady={isViewingHistory || ws.isReady}
               onExportMarkdown={handleExportMarkdown}
@@ -307,6 +326,15 @@ function MainApp() {
               onSaveReport={handleSaveReport}
               savedPath={isViewingHistory ? historyData.savedPath : ws.savedPath}
             />
+
+            {displayTopic && (
+              <section className={styles.topicStrip} aria-label="当前论题">
+                <div className={styles.topicStripInner}>
+                  <span className={styles.topicLabel}>当前论题</span>
+                  <p className={styles.topicText}>{displayTopic}</p>
+                </div>
+              </section>
+            )}
 
             {isActive && !isViewingHistory && (
               <>
@@ -428,6 +456,15 @@ function MainApp() {
           onSaveAndLeave={handleConfirmSaveAndLeave}
           onLeaveWithoutSaving={handleConfirmLeaveWithoutSaving}
           onCancel={handleCancelLeave}
+        />
+      )}
+
+      {deleteCandidate && (
+        <SessionDeleteConfirm
+          session={deleteCandidate}
+          deleting={isDeletingSession}
+          onConfirm={handleConfirmDeleteSession}
+          onCancel={handleCancelDeleteSession}
         />
       )}
 
