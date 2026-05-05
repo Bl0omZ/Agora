@@ -60,12 +60,13 @@ export const PHASE_LABELS: Record<string, string> = {
   brainstorming: '议题精炼',
   discussion: '讨论阶段',
   synthesis: '最终方案',
+  blueprint: 'Agent 系统蓝图',
   voting: '方案评审',
   followup: '后续交互',
   followup_round: '追问讨论',
 };
 
-export const PHASE_ORDER: string[] = ['brainstorming', 'discussion', 'synthesis', 'voting', 'followup'];
+export const PHASE_ORDER: string[] = ['brainstorming', 'discussion', 'synthesis', 'blueprint', 'voting', 'followup'];
 
 export const SCHEMA_VERSION = 2;
 export const SESSION_INDEX_KEY = 'ad-sessions-index';

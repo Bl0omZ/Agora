@@ -13,7 +13,13 @@
   border-radius: var(--radius-medium);
   background: var(--bg-input);
   font-size: 14px;
+  font-family: inherit;
   color: var(--ink-primary);
+  resize: none;
+  overflow: hidden;
+  min-height: 40px;
+  max-height: 200px;
+  line-height: 1.5;
 }
 
 .input:focus {

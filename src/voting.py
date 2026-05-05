@@ -9,6 +9,8 @@ from pydantic import BaseModel
 from semantic_kernel.agents import Agent
 from semantic_kernel.contents import AuthorRole, ChatMessageContent
 
+from .text_safety import strip_hidden_reasoning
+
 logger = logging.getLogger(__name__)
 
 
@@ -122,16 +124,16 @@ def _parse_vote(msg: ChatMessageContent) -> VoteResult:
     return VoteResult(
         agent_name=msg.name or "Unknown",
         stance=stance,
-        reason=_strip_think_blocks(content)[:300],
+        reason=strip_hidden_reasoning(content)[:300],
         confidence=0.3,
     )
 
 
 def _sanitize_vote(vote: VoteResult) -> VoteResult:
     """Remove provider scratchpad tags from the user-visible vote reason."""
-    return vote.model_copy(update={"reason": _strip_think_blocks(vote.reason).strip()})
+    return vote.model_copy(update={"reason": strip_hidden_reasoning(vote.reason)})
 
 
 def _strip_think_blocks(text: str) -> str:
     """Strip XML-style reasoning blocks sometimes emitted by local models."""
-    return re.sub(r"<think\b[^>]*>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL)
+    return strip_hidden_reasoning(text)

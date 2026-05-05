@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { SessionData, SessionIndexEntry, Message, PhaseEvent, VotingResult, PipelineLog } from '../types';
+import type {
+  SessionData,
+  SessionIndexEntry,
+  Message,
+  PhaseEvent,
+  VotingResult,
+  PipelineLog,
+  AgentSystemBlueprint,
+} from '../types';
 import { SessionManager } from '../utils/session';
 
 interface UseSessionReturn {
@@ -11,6 +19,8 @@ interface UseSessionReturn {
     messages?: Message[];
     phases?: PhaseEvent[];
     votingResult?: VotingResult | null;
+    blueprint?: AgentSystemBlueprint | null;
+    blueprintWarnings?: string[];
     logs?: PipelineLog[];
     savedPath?: string | null;
   }) => void;
@@ -73,6 +83,8 @@ export function useSession(): UseSessionReturn {
     messages?: Message[];
     phases?: PhaseEvent[];
     votingResult?: VotingResult | null;
+    blueprint?: AgentSystemBlueprint | null;
+    blueprintWarnings?: string[];
     logs?: PipelineLog[];
     savedPath?: string | null;
   }) => {
@@ -87,6 +99,8 @@ export function useSession(): UseSessionReturn {
         ...(partial.messages !== undefined && { messages: partial.messages }),
         ...(partial.phases !== undefined && { phases: partial.phases }),
         ...(partial.votingResult !== undefined && { votingResult: partial.votingResult }),
+        ...(partial.blueprint !== undefined && { blueprint: partial.blueprint }),
+        ...(partial.blueprintWarnings !== undefined && { blueprintWarnings: partial.blueprintWarnings }),
         ...(partial.logs !== undefined && { logs: partial.logs }),
         ...(partial.savedPath !== undefined && { savedPath: partial.savedPath }),
         updatedAt: Date.now(),

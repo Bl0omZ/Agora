@@ -21,15 +21,14 @@ from semantic_kernel.functions import KernelArguments
 from semantic_kernel.kernel import Kernel
 from semantic_kernel.prompt_template import KernelPromptTemplate, PromptTemplateConfig
 
+from .text_safety import strip_hidden_reasoning
+
 logger = logging.getLogger(__name__)
 
 
 def _strip_hidden_reasoning(content: str) -> str:
     """Remove provider reasoning tags from user-visible discussion text."""
-    content = re.sub(r"<think\b[^>]*>.*?</think>", "", content, flags=re.IGNORECASE | re.DOTALL)
-    content = re.sub(r"<think\b[^>]*>.*$", "", content, flags=re.IGNORECASE | re.DOTALL)
-    content = re.sub(r"</think>", "", content, flags=re.IGNORECASE)
-    return content.strip()
+    return strip_hidden_reasoning(content)
 
 
 def build_discussion_transcript(history: ChatHistory) -> str:

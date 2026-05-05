@@ -1,4 +1,4 @@
-import type { Message, VotingResult } from '../types';
+import type { AgentSystemBlueprint, Message, VotingResult } from '../types';
 import { PHASE_LABELS } from '../constants';
 
 export function exportAsMarkdown(
@@ -56,4 +56,28 @@ export async function captureScreenshot(element: HTMLElement): Promise<void> {
   anchor.href = url;
   anchor.download = `discussion-${Date.now()}.png`;
   anchor.click();
+}
+
+export async function exportBlueprint(
+  blueprint: AgentSystemBlueprint,
+  format: 'markdown' | 'json' | 'yaml' | 'prompt_pack',
+): Promise<void> {
+  const res = await fetch('/api/blueprint/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ blueprint, format }),
+  });
+  if (!res.ok) {
+    throw new Error(`Export failed: ${res.status}`);
+  }
+  const data = await res.json();
+  for (const file of data.files ?? []) {
+    const blob = new Blob([file.content], { type: file.mime_type ?? 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = file.filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 }

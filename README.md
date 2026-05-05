@@ -7,11 +7,13 @@
 ## Features
 
 - **多角色协作**：主持人 (Host) + 架构师 / 务实派 / 反方等专家 agent，每个 agent 可挂不同模型
+- **Agent 预设 (Preset)**：根据议题类型自动匹配讨论参与者组合——架构评审、需求分析、方案对比、流程设计、复盘分析、文档设计，共 6 种预设
 - **LLM 驱动主持**：基于 Semantic Kernel `GroupChatOrchestration`，由主持人 LLM 决定谁发言、何时收敛
 - **议题精炼（可选）**：讨论开始前由主持人通过多轮 Q&A 帮用户把模糊议题精炼为可讨论的精准问题
+- **Blueprint 生成**：讨论结束后自动生成 Agent 系统蓝图（角色、工作流、评估标准），支持导出为 JSON / YAML / Markdown / Prompt Pack
 - **独立投票**：专家 agent 并行表态（赞成 / 反对 / 中立 + 置信度 + 理由），本地聚合
 - **追问 (Follow-up)**：投票后用户可基于完整对话上下文追加问题
-- **报告归档**：经用户确认后保存为 markdown，沉淀讨论资产
+- **报告归档**：经用户确认后保存为结构化 markdown 报告，沉淀讨论资产
 - **SSE 代理适配**：内置 `openai_sse_proxy`，可对接只支持 SSE 流式的本地代理（如 `http://localhost:3030/v1`）
 - **Web UI**：实时 timeline 展示发言、流式打字、投票卡、报告管理
 
@@ -97,19 +99,25 @@ agent-discussion -t "测试" -v
 
 ```yaml
 manager_service_index: 0  # 用第几个 agent 的 service 作为主持人 LLM
+default_preset: architecture_review
+
+presets:
+  architecture_review:
+    label: "架构评审"
+    agents: [Architect, Pragmatist, Challenger]
 
 agents:
   - name: Host
     description: "主持人，控场 + 选人 + 收敛"
     instructions: "你是讨论主持人……"
-    service_type: openai_sse_proxy
+    service_type: openai_compatible
     model: gpt-4o
     api_key: "${YOUR_API_KEY}"
-    base_url: "http://localhost:3030/v1"
+    base_url: "https://your-endpoint.com/v1"
 
   - name: Architect
-    description: "架构师，关注扩展性与抽象"
-    instructions: "你倾向于关注长期影响……"
+    description: "架构师，关注系统设计与模块边界"
+    instructions: "你是一位资深架构师……"
     service_type: openai_compatible
     model: glm-4.6
     api_key: "${YOUR_API_KEY}"
@@ -119,10 +127,10 @@ agents:
     description: "总结者，最后输出行动项"
     final_only: true   # 仅在终结轮发言
     instructions: "请输出可执行的下一步……"
-    service_type: openai_sse_proxy
+    service_type: openai_compatible
     model: gpt-4o
     api_key: "${YOUR_API_KEY}"
-    base_url: "http://localhost:3030/v1"
+    base_url: "https://your-endpoint.com/v1"
 
 # 可选：覆盖默认配置
 discussion:
@@ -192,9 +200,11 @@ brainstorm:
 | `src/brainstorm.py` | `BrainstormSession`：主持人多轮 Q&A 精炼议题（含降级策略） |
 | `src/voting.py` | 并行投票 + 本地聚合（赞成/反对/中立 + 置信度） |
 | `src/loader.py` | YAML 配置加载、agent 实例化、kernel 注册 |
+| `src/blueprint.py` | 讨论结束后生成 Agent 系统蓝图（角色/工作流/评估），含 fallback 机制 |
+| `src/blueprint_export.py` | Blueprint 导出为 JSON / YAML / Markdown / Prompt Pack |
 | `src/openai_sse_proxy.py` | 适配 SSE-only 本地代理，支持 SK 的 streaming 路径 |
-| `src/reporting.py` | 把对话和投票渲染成 markdown |
-| `src/models.py` | Pydantic 配置模型 |
+| `src/reporting.py` | 把对话和投票渲染成结构化 markdown 报告 |
+| `src/models.py` | Pydantic 配置模型（含 PresetConfig / BrainstormConfig） |
 | `src/web_entry.py` | 可安装的 Web 后端入口 |
 
 ## Configuration
@@ -224,11 +234,25 @@ supports_structured_output: false
 
 `LLMGroupChatManager` 会回退到 prompt + regex 解析模式。
 
+### Agent 预设 (Presets)
+
+配置文件顶层的 `presets` 字段定义可选的讨论参与者组合。主持人在 brainstorm 阶段自动推荐最匹配的 preset：
+
+| Preset | 参与者 | 适用场景 |
+|--------|--------|---------|
+| `architecture_review` | Architect + Pragmatist + Challenger | 系统设计、可行性评估 |
+| `requirements_analysis` | RequirementsAnalyst + DomainExpert + Challenger | 需求完整性、优先级 |
+| `solution_comparison` | Evaluator + Architect + Pragmatist | 多方案对比评估 |
+| `process_design` | ProcessDesigner + Pragmatist + Challenger | 流程设计、职责划分 |
+| `incident_review` | RootCauseAnalyst + DomainExpert + Challenger | 复盘分析、根因定位 |
+| `document_design` | DomainExpert + RequirementsAnalyst + Challenger | 文档/模板/规范设计 |
+
 ### 内置示例配置
 
 | 文件 | 用途 |
 |------|------|
-| `src/config/agents.yaml` | 默认完整配置 |
+| `src/config/agents.yaml` | 默认完整配置（含 8 个 agent + 6 种 preset） |
+| `src/config/agents_optimized.yaml` | agents.yaml 的优化变体（A/B test，仅覆盖差异项） |
 | `src/config/discussion_only.yaml` | 仅讨论，不投票 |
 | `src/config/voting_only.yaml` | 仅投票，不讨论 |
 
@@ -263,9 +287,11 @@ lsof -i :5173 | cat
 
 更多上下文见根目录的 `CLAUDE.md`（项目记忆）和 `KNOWN_ISSUES.md`（遗留问题清单）。
 
-### 添加新 agent
+### 添加新 agent 或 preset
 
 在 `src/config/agents.yaml` 的 `agents` 列表追加一个条目即可，无需改代码。`description` 字段是必填的——`GroupChatOrchestration` 会用它生成给主持人 LLM 的"参与者介绍"。
+
+新增 agent 或 preset 时，需同步到 `src/config/agents_optimized.yaml`。该文件是 agents.yaml 的优化变体，agents.yaml 为权威配置。
 
 ## License
 

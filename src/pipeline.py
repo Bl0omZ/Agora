@@ -4,7 +4,7 @@ import logging
 
 from semantic_kernel.contents import AuthorRole, ChatHistory, ChatMessageContent
 
-from .loader import create_agent, create_service
+from .loader import create_agent, create_service, resolve_preset
 from .discussion import build_discussion_transcript, run_discussion, run_followup
 from .models import AppConfig
 from .reporting import get_default_report_dir, save_report
@@ -17,17 +17,21 @@ async def run_pipeline(config: AppConfig, topic: str) -> None:
     """Main pipeline: discussion → final agents → voting → follow-up loop → confirmation."""
 
     manager_config = config.agents[config.manager_service_index]
+    selected_discussion_names = {agent.name for agent in resolve_preset(config)}
     # Separate discussion agents from final_only agents
     discussion_agents = []
     final_agents = []
     for index, ac in enumerate(config.agents):
         if index == config.manager_service_index:
             continue
-        agent = create_agent(ac)
         if ac.final_only:
+            agent = create_agent(ac)
             final_agents.append((ac, agent))
-        else:
+        elif ac.name in selected_discussion_names:
+            agent = create_agent(ac)
             discussion_agents.append(agent)
+        else:
+            logger.info("Skipping agent not in default preset: %s", ac.name)
 
     manager_service = create_service(manager_config)
 

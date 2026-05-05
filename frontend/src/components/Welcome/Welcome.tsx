@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import styles from './Welcome.module.css';
 
 interface WelcomeProps {
@@ -5,14 +6,30 @@ interface WelcomeProps {
 }
 
 export function Welcome({ onStart }: WelcomeProps) {
+  const [topic, setTopic] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 240)}px`;
+  }, [topic]);
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const input = form.elements.namedItem('topic') as HTMLInputElement;
-    const topic = input.value.trim();
-    if (topic) {
-      onStart(topic);
-      input.value = '';
+    const trimmedTopic = topic.trim();
+    if (trimmedTopic) {
+      onStart(trimmedTopic);
+      setTopic('');
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
     }
   };
 
@@ -25,11 +42,14 @@ export function Welcome({ onStart }: WelcomeProps) {
           输入一个话题，多个 AI Agent 将从不同视角展开讨论、辩论和总结。
         </p>
         <form className={styles.form} onSubmit={handleSubmit}>
-          <input
+          <textarea
+            ref={textareaRef}
             name="topic"
-            type="text"
             className={styles.input}
             placeholder="输入讨论话题…"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            onKeyDown={handleKeyDown}
             autoFocus
           />
           <button type="submit" className={styles.button}>
