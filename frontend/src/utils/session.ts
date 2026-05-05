@@ -69,6 +69,8 @@ export const SessionManager = {
       messages: [],
       phases: [],
       votingResult: null,
+      blueprint: null,
+      blueprintWarnings: [],
       logs: [],
       savedPath: null,
       createdAt: now,

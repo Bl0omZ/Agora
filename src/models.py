@@ -30,6 +30,14 @@ class AgentConfig(BaseModel):
     request_timeout: float = Field(240.0, description="Per-request timeout in seconds for this agent's LLM calls.")
 
 
+class PresetConfig(BaseModel):
+    """A named combination of discussion agents."""
+
+    label: str = Field(..., description="Display label for this preset.")
+    description: str = Field(..., description="Short explanation of the preset focus.")
+    agents: list[str] = Field(..., description="Discussion agent names included in this preset.")
+
+
 class DiscussionConfig(BaseModel):
     """Configuration for the discussion phase."""
 
@@ -113,6 +121,8 @@ class AppConfig(BaseModel):
     """Top-level application configuration."""
 
     agents: list[AgentConfig]
+    presets: dict[str, PresetConfig] = Field(default_factory=dict)
+    default_preset: str | None = None
     discussion: DiscussionConfig = DiscussionConfig()
     voting: VotingConfig = VotingConfig()
     brainstorm: BrainstormConfig = BrainstormConfig()

@@ -34,6 +34,50 @@ export interface VotingResult {
   conclusion: string;
 }
 
+export interface BlueprintAgentSpec {
+  name: string;
+  role: string;
+  goal: string;
+  instructions: string;
+  inputs: string[];
+  outputs: string[];
+  collaboration_rules: string[];
+}
+
+export interface WorkflowStep {
+  id: string;
+  name: string;
+  owner_agent: string;
+  input: string;
+  output: string;
+  next: string[];
+  error_path: string;
+}
+
+export interface AgentSystemBlueprint {
+  schema_version: number;
+  id: string;
+  project_id?: string | null;
+  session_id?: string | null;
+  name: string;
+  status: 'draft' | 'reviewed' | 'exported';
+  problem_statement: string;
+  target_user: string;
+  use_cases: string[];
+  non_goals: string[];
+  input_contract: { description: string; examples: string[]; required_fields: string[] };
+  output_contract: { description: string; format: string; required_sections: string[] };
+  workflow: { steps: WorkflowStep[] };
+  agents: BlueprintAgentSpec[];
+  tools: Array<Record<string, unknown>>;
+  evaluation: { criteria: string[]; test_cases: string[] };
+  risks: Array<{ risk: string; mitigation: string; severity: string }>;
+  exports: Array<Record<string, unknown>>;
+  generation: { source: string; warnings: string[] };
+}
+
+export type BlueprintExportFormat = 'markdown' | 'json' | 'yaml' | 'prompt_pack';
+
 export type AgentStatus = 'idle' | 'thinking' | 'spoken' | 'skipped';
 
 export interface AgentState {
@@ -47,6 +91,7 @@ export type DiscussionPhase =
   | 'brainstorming'
   | 'discussion'
   | 'synthesis'
+  | 'blueprint'
   | 'voting'
   | 'followup'
   | 'followup_round'
@@ -73,6 +118,8 @@ export interface SessionData {
   messages: Message[];
   phases: PhaseEvent[];
   votingResult: VotingResult | null;
+  blueprint?: AgentSystemBlueprint | null;
+  blueprintWarnings?: string[];
   logs: PipelineLog[];
   savedPath: string | null;
   createdAt: number;
@@ -187,6 +234,19 @@ export interface DispatchPlan {
   expected_final_output?: string;
   /** 派发整体策略说明，可空。 */
   rationale?: string;
+  recommended_preset?: string;
+}
+
+export interface PresetInfo {
+  name: string;
+  label: string;
+  description: string;
+  agents: Array<{ name: string; description: string; model?: string }>;
+}
+
+export interface PresetRecommendation {
+  recommended: string;
+  presets: PresetInfo[];
 }
 
 /**

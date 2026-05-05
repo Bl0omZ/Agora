@@ -15,6 +15,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from semantic_kernel.contents import AuthorRole, ChatHistory, ChatMessageContent
 from semantic_kernel.connectors.ai.open_ai import OpenAIChatCompletion
 
+from src.blueprint import build_blueprint_fallback
 from src.discussion import (
     LLMGroupChatManager,
     _run_managed_group_chat,
@@ -24,7 +25,15 @@ from src.discussion import (
 )
 from src.loader import create_service
 from src.brainstorm import BrainstormSession
-from src.models import AgentConfig, AppConfig, BrainstormConfig, DiscussionConfig, ServiceType, VotingConfig
+from src.models import (
+    AgentConfig,
+    AppConfig,
+    BrainstormConfig,
+    DiscussionConfig,
+    PresetConfig,
+    ServiceType,
+    VotingConfig,
+)
 from src.openai_sse_proxy import SSEProxyAsyncOpenAI, _build_chat_completion_from_sse
 from src.pipeline import run_pipeline
 from src.reporting import get_default_report_dir, save_report
@@ -183,10 +192,99 @@ def test_report_includes_dispatch_execution_metadata(tmp_path):
     )
 
     content = report_path.read_text(encoding="utf-8")
-    assert "## 执行计划" in content
+    assert "## 讨论设置" in content
     assert "执行模式：focused" in content
-    assert "派发 agent：Architect" in content
-    assert "最终产出：安全工单字段清单" in content
+    assert "参与 agent：Architect" in content
+    assert "目标产出：安全工单字段清单" in content
+
+
+@pytest.mark.asyncio
+async def test_web_pipeline_emits_blueprint_after_summary(monkeypatch):
+    from src import web_server
+
+    class FakeWebSocket:
+        def __init__(self):
+            self.events: list[dict] = []
+
+        async def send_text(self, data: str):
+            self.events.append(json.loads(data))
+
+    config = AppConfig(
+        agents=[
+            AgentConfig(
+                name="Host",
+                description="主持人",
+                instructions="控场",
+                service_type=ServiceType.OPENAI,
+                model="host-model",
+                api_key="host-key",
+            ),
+            AgentConfig(
+                name="Architect",
+                description="架构师",
+                instructions="分析",
+                service_type=ServiceType.OPENAI,
+                model="architect-model",
+                api_key="architect-key",
+            ),
+            AgentConfig(
+                name="Synthesizer",
+                description="总结者",
+                instructions="输出最终方案",
+                service_type=ServiceType.OPENAI,
+                model="synth-model",
+                api_key="synth-key",
+                final_only=True,
+            ),
+        ],
+        brainstorm=BrainstormConfig(enabled=False),
+        discussion=DiscussionConfig(enabled=False),
+        voting=VotingConfig(enabled=False),
+        manager_service_index=0,
+    )
+    session = SimpleNamespace(
+        config=config,
+        history=ChatHistory(),
+        discussion_transcript="",
+        discussion_result=None,
+        voting_result=None,
+        final_solution=None,
+        review_result=None,
+        dispatch_state=None,
+        manager_service=object(),
+        manager_config=config.agents[0],
+        discussion_agents=[FakeAgent(name="Architect")],
+        final_agents=[(config.agents[2], FakeAgent(name="Synthesizer", response_text="最终方案"))],
+        blueprint=None,
+        blueprint_generation_status="idle",
+        blueprint_warnings=[],
+    )
+
+    async def fake_run_synthesis_phase(_ws, state, _topic):
+        state.final_solution = "最终方案"
+        return "最终方案"
+
+    async def fake_run_blueprint_phase(_ws, state, _topic):
+        state.blueprint = build_blueprint_fallback(
+            session_id="s1",
+            topic="原议题",
+            final_solution="最终方案",
+            dispatch_state=state.dispatch_state,
+            warning="test",
+        )
+        await web_server._send_json(_ws, {"type": "phase", "phase": "blueprint", "label": "Agent System Blueprint"})
+        await web_server._send_json(_ws, {"type": "blueprint", "blueprint": state.blueprint, "warnings": ["test"]})
+        return state.blueprint
+
+    monkeypatch.setattr(web_server, "_run_synthesis_phase", fake_run_synthesis_phase)
+    monkeypatch.setattr(web_server, "_run_blueprint_phase", fake_run_blueprint_phase, raising=False)
+
+    ws = FakeWebSocket()
+    await web_server._run_session_pipeline(ws, session, "原议题", interaction_key="client-1")
+
+    event_types = [event.get("type") for event in ws.events]
+    assert event_types.index("summary") < event_types.index("blueprint")
+    assert any(event.get("type") == "phase" and event.get("phase") == "blueprint" for event in ws.events)
 
 
 def test_create_service_supports_openai_sse_proxy():
@@ -195,7 +293,7 @@ def test_create_service_supports_openai_sse_proxy():
         description="proxy",
         instructions="proxy",
         service_type=ServiceType.OPENAI_SSE_PROXY,
-        model="gpt-5.4",
+        model="GLM-5.1",
         api_key="xx",
         base_url="http://localhost:3030/v1",
     )
@@ -362,6 +460,53 @@ def test_invalid_low_complexity_dispatch_falls_back_to_direct():
     assert state["dispatch_plan"]["tasks"] == []
 
 
+def test_invalid_medium_complexity_dispatch_falls_back_to_default_preset():
+    from src import web_server
+
+    config = AppConfig(
+        agents=[
+            AgentConfig(name="Host", description="host", instructions="host", model="host-model"),
+            AgentConfig(name="Architect", description="arch", instructions="arch", model="arch-model"),
+            AgentConfig(name="Pragmatist", description="pm", instructions="pm", model="pm-model"),
+            AgentConfig(name="Challenger", description="risk", instructions="risk", model="risk-model"),
+            AgentConfig(name="DomainExpert", description="domain", instructions="domain", model="domain-model"),
+        ],
+        manager_service_index=0,
+        presets={
+            "architecture_review": PresetConfig(
+                label="架构评审",
+                description="系统设计、可行性评估、假设验证",
+                agents=["Architect", "Pragmatist", "Challenger"],
+            )
+        },
+        default_preset="architecture_review",
+    )
+
+    state = web_server._build_dispatch_state(
+        original_topic="原议题",
+        refined_topic="精炼议题",
+        context_summary="",
+        raw_complexity={"level": "medium", "rationale": "需要讨论"},
+        raw_dispatch_plan={"tasks": [{"agent_name": "Ghost", "sub_topic": "不存在"}]},
+        config=config,
+    )
+
+    assert state["execution_mode"] == "panel"
+    assert state["selected_agents"] == ["Architect", "Pragmatist", "Challenger"]
+
+
+def test_extract_report_topic_supports_current_and_legacy_formats(tmp_path):
+    from src import web_server
+
+    current = tmp_path / "current.md"
+    current.write_text("# 新格式议题\n\n> 生成时间：2026-05-05\n", encoding="utf-8")
+    legacy = tmp_path / "legacy.md"
+    legacy.write_text("# 讨论报告\n\n- 生成时间：2026-04-25\n- 讨论话题：旧格式议题\n", encoding="utf-8")
+
+    assert web_server._extract_report_topic(current) == "新格式议题"
+    assert web_server._extract_report_topic(legacy) == "旧格式议题"
+
+
 @pytest.mark.asyncio
 async def test_send_json_serializes_openai_usage_metadata():
     from src.web_server import _send_json
@@ -436,11 +581,11 @@ async def test_sse_proxy_client_aggregates_sse_chunks(monkeypatch):
         200,
         text=(
             'data: {"id":"abc","choices":[{"delta":{"role":"assistant","content":""},"finish_reason":null,"index":0}],'
-            '"created":123,"model":"gpt-5.4","object":"chat.completion.chunk","usage":null}\n\n'
+            '"created":123,"model":"GLM-5.1","object":"chat.completion.chunk","usage":null}\n\n'
             'data: {"id":"abc","choices":[{"delta":{"content":"Hello"},"finish_reason":null,"index":0}],'
-            '"created":123,"model":"gpt-5.4","object":"chat.completion.chunk","usage":null}\n\n'
+            '"created":123,"model":"GLM-5.1","object":"chat.completion.chunk","usage":null}\n\n'
             'data: {"id":"abc","choices":[{"delta":{"content":" world"},"finish_reason":"stop","index":0}],'
-            '"created":123,"model":"gpt-5.4","object":"chat.completion.chunk","usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}\n\n'
+            '"created":123,"model":"GLM-5.1","object":"chat.completion.chunk","usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}\n\n'
             "data: [DONE]\n\n"
         ),
         request=httpx.Request("POST", "http://localhost:3030/v1/chat/completions"),
@@ -452,13 +597,13 @@ async def test_sse_proxy_client_aggregates_sse_chunks(monkeypatch):
     monkeypatch.setattr(client._client, "post", fake_post)
 
     completion = await client.chat.completions.create(
-        model="gpt-5.4",
+        model="GLM-5.1",
         messages=[{"role": "user", "content": "hi"}],
     )
 
     assert completion.choices[0].message.content == "Hello world"
     assert completion.choices[0].finish_reason == "stop"
-    assert completion.model == "gpt-5.4"
+    assert completion.model == "GLM-5.1"
     assert completion.usage.total_tokens == 3
 
 
@@ -466,11 +611,11 @@ def test_sse_proxy_parses_message_content_when_delta_content_missing():
     completion = _build_chat_completion_from_sse(
         (
             'data: {"id":"abc","choices":[{"message":{"role":"assistant","content":"Hello from message"},'
-            '"finish_reason":"stop","index":0}],"created":123,"model":"gpt-5.4",'
+            '"finish_reason":"stop","index":0}],"created":123,"model":"GLM-5.1",'
             '"object":"chat.completion.chunk","usage":null}\n\n'
             "data: [DONE]\n\n"
         ),
-        fallback_model="gpt-5.4",
+        fallback_model="GLM-5.1",
     )
 
     assert completion.choices[0].message.content == "Hello from message"
@@ -484,7 +629,7 @@ async def test_sse_proxy_stream_response_is_openai_async_stream_with_usage_attr(
         200,
         text=(
             'data: {"id":"abc","choices":[{"delta":{"content":"Hello"},"finish_reason":"stop","index":0}],'
-            '"created":123,"model":"gpt-5.4","object":"chat.completion.chunk","usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n'
+            '"created":123,"model":"GLM-5.1","object":"chat.completion.chunk","usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n'
             "data: [DONE]\n\n"
         ),
         request=httpx.Request("POST", "http://localhost:3030/v1/chat/completions"),
@@ -496,7 +641,7 @@ async def test_sse_proxy_stream_response_is_openai_async_stream_with_usage_attr(
     monkeypatch.setattr(client._client, "post", fake_post)
 
     stream = await client.chat.completions.create(
-        model="gpt-5.4",
+        model="GLM-5.1",
         messages=[{"role": "user", "content": "hi"}],
         stream=True,
     )
@@ -553,7 +698,7 @@ async def test_run_pipeline_saves_report_after_confirmation(monkeypatch, tmp_pat
     reports = list(tmp_path.glob("*.md"))
     assert len(reports) == 1
     content = reports[0].read_text(encoding="utf-8")
-    assert "# 讨论报告" in content
+    assert "# 是否上线" in content
     assert "是否上线" in content
     assert "总结完成" in content
     assert "多数赞成" in content
@@ -600,7 +745,7 @@ async def test_run_discussion_uses_llm_group_chat_manager(monkeypatch, caplog):
             description="proxy",
             instructions="proxy",
             service_type=ServiceType.OPENAI_SSE_PROXY,
-            model="gpt-5.4",
+            model="GLM-5.1",
             api_key="xx",
             base_url="http://localhost:3030/v1",
         )
@@ -685,7 +830,7 @@ async def test_managed_group_chat_falls_back_to_visible_transcript_on_timeout(mo
                 description="proxy",
                 instructions="proxy",
                 service_type=ServiceType.OPENAI_SSE_PROXY,
-                model="gpt-5.4",
+                model="GLM-5.1",
                 api_key="xx",
                 base_url="http://localhost:3030/v1",
             )
@@ -1078,6 +1223,201 @@ async def test_web_pipeline_focused_dispatch_runs_only_selected_agent(monkeypatc
     assert captured["review_context"] == "最终方案：字段清单"
     assert any(event.get("type") == "summary" and event.get("content") == "最终方案：字段清单" for event in ws.events)
     assert not any(event.get("type") == "message" and event.get("name") == "Pragmatist" for event in ws.events)
+
+
+@pytest.mark.asyncio
+async def test_web_pipeline_recommends_and_applies_confirmed_preset(monkeypatch):
+    from src import web_server
+
+    class FakeWebSocket:
+        def __init__(self):
+            self.events: list[dict] = []
+
+        async def send_text(self, data: str):
+            self.events.append(json.loads(data))
+
+    class FakeBrainstormSession:
+        def __init__(self, config, kernel, service_id, on_question):
+            pass
+
+        async def run(self, original_topic: str):
+            return {
+                "refined_topic": "精炼议题",
+                "context_summary": "摘要",
+                "history": [],
+                "complexity": {"level": "medium", "rationale": "需要需求视角"},
+                "dispatch_plan": {
+                    "execution_mode": "panel",
+                    "tasks": [
+                        {"agent_name": "Architect", "sub_topic": "架构判断"},
+                        {"agent_name": "Ghost", "sub_topic": "不存在"},
+                    ],
+                    "expected_final_output": "需求字段清单",
+                    "recommended_preset": "architecture_review",
+                },
+            }
+
+    config = AppConfig(
+        agents=[
+            AgentConfig(
+                name="Host",
+                description="主持人",
+                instructions="控场",
+                service_type=ServiceType.OPENAI,
+                model="host-model",
+                api_key="host-key",
+            ),
+            AgentConfig(
+                name="Architect",
+                description="架构师",
+                instructions="架构",
+                service_type=ServiceType.OPENAI,
+                model="architect-model",
+                api_key="architect-key",
+            ),
+            AgentConfig(
+                name="Pragmatist",
+                description="务实派",
+                instructions="落地",
+                service_type=ServiceType.OPENAI,
+                model="pragmatist-model",
+                api_key="pragmatist-key",
+            ),
+            AgentConfig(
+                name="RequirementsAnalyst",
+                description="需求分析师",
+                instructions="需求",
+                service_type=ServiceType.OPENAI,
+                model="req-model",
+                api_key="req-key",
+            ),
+            AgentConfig(
+                name="DomainExpert",
+                description="领域专家",
+                instructions="领域",
+                service_type=ServiceType.OPENAI,
+                model="domain-model",
+                api_key="domain-key",
+            ),
+            AgentConfig(
+                name="Challenger",
+                description="挑战者",
+                instructions="质疑",
+                service_type=ServiceType.OPENAI,
+                model="challenger-model",
+                api_key="challenger-key",
+            ),
+            AgentConfig(
+                name="Synthesizer",
+                description="总结",
+                instructions="总结",
+                service_type=ServiceType.OPENAI,
+                model="sum-model",
+                api_key="sum-key",
+                final_only=True,
+            ),
+        ],
+        presets={
+            "architecture_review": PresetConfig(
+                label="架构评审",
+                description="系统设计、可行性评估、假设验证",
+                agents=["Architect", "Pragmatist", "Challenger"],
+            ),
+            "requirements_analysis": PresetConfig(
+                label="需求分析",
+                description="需求完整性、优先级、边界定义",
+                agents=["RequirementsAnalyst", "DomainExpert", "Challenger"],
+            ),
+        },
+        default_preset="architecture_review",
+        discussion=DiscussionConfig(enabled=True, max_rounds=2),
+        voting=VotingConfig(enabled=False),
+        manager_service_index=0,
+    )
+    fake_agents = {agent.name: FakeAgent(name=agent.name) for agent in config.agents}
+    session = SimpleNamespace(
+        config=config,
+        history=ChatHistory(),
+        discussion_transcript="",
+        discussion_result=None,
+        voting_result=None,
+        final_solution=None,
+        review_result=None,
+        dispatch_state=None,
+        manager_service=object(),
+        manager_config=config.agents[0],
+        discussion_agents=[
+            fake_agents["Architect"],
+            fake_agents["Pragmatist"],
+            fake_agents["RequirementsAnalyst"],
+            fake_agents["DomainExpert"],
+            fake_agents["Challenger"],
+        ],
+        discussion_agent_map={
+            name: fake_agents[name]
+            for name in ["Architect", "Pragmatist", "RequirementsAnalyst", "DomainExpert", "Challenger"]
+        },
+        final_agents=[],
+    )
+    captured: dict[str, list[str]] = {}
+
+    async def fake_run_discussion_phase(session, topic, callback, on_agent_selected=None, agents=None):
+        captured["discussion_agents"] = [agent.name for agent in agents]
+        history = ChatHistory()
+        history.add_message(ChatMessageContent(role=AuthorRole.USER, content=topic))
+        return "讨论摘要", history
+
+    monkeypatch.setattr(web_server, "BrainstormSession", FakeBrainstormSession, raising=False)
+    monkeypatch.setattr(web_server, "_run_discussion_phase", fake_run_discussion_phase)
+
+    ws = FakeWebSocket()
+    task = asyncio.create_task(
+        web_server._run_session_pipeline(ws, session, "原议题", interaction_key="preset-client")
+    )
+    try:
+        for _ in range(50):
+            confirm_future = web_server.pending_topic_confirmations.get("preset-client")
+            if confirm_future is not None:
+                confirm_future.set_result("confirm")
+                break
+            await asyncio.sleep(0.01)
+
+        for _ in range(50):
+            preset_event = next(
+                (event for event in ws.events if event.get("type") == "preset_recommended"),
+                None,
+            )
+            if preset_event is not None:
+                break
+            await asyncio.sleep(0.01)
+
+        assert preset_event["preset_name"] == "architecture_review"
+        assert [agent["name"] for agent in preset_event["agents"]] == [
+            "Architect",
+            "Pragmatist",
+            "Challenger",
+        ]
+
+        preset_future = web_server.pending_preset_confirmations["preset-client"]
+        preset_future.set_result("requirements_analysis")
+
+        await asyncio.wait_for(task, timeout=1)
+    finally:
+        if not task.done():
+            task.cancel()
+
+    assert captured["discussion_agents"] == ["RequirementsAnalyst", "DomainExpert", "Challenger"]
+    assert session.dispatch_state["preset_name"] == "requirements_analysis"
+    assert session.dispatch_state["dispatch_plan"]["selected_agents"] == [
+        "RequirementsAnalyst",
+        "DomainExpert",
+        "Challenger",
+    ]
+    assert any(
+        event.get("type") == "preset_confirmed"
+        and event.get("preset_name") == "requirements_analysis"
+        for event in ws.events
+    )
 
 
 @pytest.mark.asyncio

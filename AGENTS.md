@@ -1,10 +1,21 @@
 # AGENTS.md — Agent Discussion 项目记忆
 
-> 本文档专为 AI 助手（Codex / Copilot / Codex）在新会话中**快速恢复上下文**而写。
+> 本文档专为 AI 助手（Claude / Copilot / Codex）在新会话中**快速恢复上下文**而写。
 > 人类维护者请在做出**架构性变更**或**关键决策**后更新本文档。
-> 最近一次更新：2026-04-25。
+> 最近一次更新：2026-05-05。
 
 ---
+
+## 0. 2026-05-05 功能增量
+
+本轮把固定三人讨论升级为 preset 驱动的 agent 池，并在总结后生成可导出的 Agent System Blueprint。
+
+**新增能力：**
+- `src/blueprint.py`, `src/blueprint_export.py`, `src/text_safety.py` — Agent 系统蓝图生成/导出/安全
+- `tests/test_blueprint.py`, `tests/test_config_safety.py`
+- `frontend/src/components/Blueprint/`, `frontend/src/components/Preset/` — 新前端组件
+- `docs/plans/2026-05-04-agent-preset-design.md`, `docs/plans/2026-05-05-preset-implementation-plan.md`
+- `report/2026-05-04-mattpocock-skills-analysis.md`
 
 ## 1. 30 秒理解项目
 
@@ -34,6 +45,8 @@
 | `loader.py` | 小 | 修改 YAML 配置加载、agent 实例化、Kernel 注册 |
 | `models.py` | 小 | 修改 Pydantic 配置模型（`AppConfig` / `BrainstormConfig` 等） |
 | `openai_sse_proxy.py` | 中 | 修改对 SSE-only 本地代理的适配（streaming 路径有特殊处理） |
+| `blueprint.py` | 中 | 修改 Agent 系统蓝图生成（含 fallback 机制） |
+| `blueprint_export.py` | 小 | 修改蓝图导出格式（JSON/YAML/Markdown/Prompt Pack） |
 | `reporting.py` | 小 | 修改最终 markdown 报告格式 |
 
 ### 前端（`frontend/src/`）
@@ -50,7 +63,8 @@
 
 ### 配置
 
-- `src/config/agents.yaml` — 默认完整配置（含 brainstorm + discussion + voting）
+- `src/config/agents.yaml` — 默认完整配置（含 8 个 agent + 6 种 preset + brainstorm/discussion/voting）
+- `src/config/agents_optimized.yaml` — agents.yaml 优化变体（A/B test，仅覆盖差异项；新增 agent/preset 时需同步）
 - `src/config/discussion_only.yaml` — 仅讨论
 - `src/config/voting_only.yaml` — 仅投票
 - `.env.example` — 本地环境变量模板，实际 `.env` 不纳入 Git
@@ -83,8 +97,6 @@ result = await manager.filter_results(history)  # 总结
 
 **已部署的防御**：`LLMGroupChatManager.min_rounds` 字段 + `should_terminate` 的硬性守卫（见 `src/discussion.py:62, 118-129`）。`_run_managed_group_chat` 在调用时设置 `min_rounds = max(1, len(agents))`（见 `src/discussion.py:348`）。
 
-> ⚠️ **当前已知此防御未真正生效**，详见 `KNOWN_ISSUES.md` 问题 #1。
-
 ### 3.2 SSE-only 代理的 streaming 适配
 
 部分本地代理（`http://localhost:3030/v1`）只支持 SSE 流式，不支持非流式 `chat.completions.create`。但 SK 的 `GroupChatOrchestration` 内部会强制 `stream=True`。
@@ -104,7 +116,8 @@ result = await manager.filter_results(history)  # 总结
 | ← server | `message` | `phase`, `name`, `role`, `content` |
 | ← server | `agent_status` | `name`, `state` |
 | ← server | `voting_result` | `votes[]`, `conclusion` |
-| ← server | `agent_meta` | `agents: [{name, model, role, is_moderator}]`（设计文档定义，**当前未推送**） |
+| ← server | `agent_meta` | `agents: [{name, model, role, is_moderator}]` |
+| ← server | `blueprint` | `blueprint`, `warnings` |
 | ← server | `moderator_question` | `round`, `question`, `options[]`, `allow_freetext`, `model` |
 | → client | `moderator_answer` | `round`, `answer` |
 | → client | `brainstorm_skip` | `{}` |
@@ -122,14 +135,18 @@ result = await manager.filter_results(history)  # 总结
 
 ---
 
-## 4. 本次会话（2026-04-24）的修复记录
+## 4. 修复记录汇总
+
+### 2026-04-24 会话修复
+
+> 以下修复已在 2026-04-25 验证通过，详见 `KNOWN_ISSUES.md` 已解决存档。
 
 ### 改动文件清单
 
 | 文件 | 改动 | 状态 |
 |---|---|---|
-| `src/web_server.py` | `push_message` / `push_followup_msg` 按 role 区分 name fallback | ⚠️ 代码已 apply，但运行时未生效（见 KNOWN_ISSUES #2） |
-| `src/discussion.py` | `LLMGroupChatManager.min_rounds` 字段 + `should_terminate` 守卫 + `_run_managed_group_chat` 设置 floor | ⚠️ 代码已 apply，但运行时未生效（见 KNOWN_ISSUES #1） |
+| `src/web_server.py` | `push_message` / `push_followup_msg` 按 role 区分 name fallback | ✅ 已修复 |
+| `src/discussion.py` | `LLMGroupChatManager.min_rounds` 字段 + `should_terminate` 守卫 + `_run_managed_group_chat` 设置 floor | ✅ 已修复 |
 | `src/discussion.py` | `on_agent_selected` 传入 `LLMGroupChatManager`，恢复被选中 agent 的 thinking 状态推送 | ✅ 单测通过 |
 | `src/brainstorm.py` / `src/models.py` / `src/web_server.py` | 接入可见的主持人 brainstorm：Host 提问、复杂度判断、派发计划进入 `message` 流，并等待用户确认精炼议题 | ✅ 单测通过，待 UI 实测 |
 | `frontend/src/hooks/useWebSocket.ts` / `frontend/src/App.tsx` / `frontend/src/components/Timeline/Timeline.tsx` | 接入 Opus 产出的 Brainstorm UI 组件与 HostMessage 渲染 | ✅ `npm run build` 通过 |
@@ -142,6 +159,24 @@ result = await manager.filter_results(history)  # 总结
 - `sessions/mocoj2ki.json` — 修复**前**的会话，暴露了三个原始问题
 - `sessions/mobavn8e.json` — 修复**后**第一次回归测试，暴露修复未真正生效
 - 下一次回归请新建一份 session 并对照 `KNOWN_ISSUES.md` 验收
+
+### 2026-05-05 会话修复
+
+本次修复源自 `docs/superpowers/plans/2026-05-05-multi-issue-fix.md` 计划，覆盖 10 个 UX 和功能缺陷。
+
+| 文件 | 改动 | 状态 |
+|---|---|---|
+| `frontend/src/App.tsx:114-144` | sync effect 加 `!session.isHistoryMode` 守卫，修复会话列表标题被覆写 bug（#10） | ✅ 已修复 |
+| `frontend/src/components/InputBar/InputBar.tsx` | `<input>` → `<textarea>` + 自动扩展高度 | ✅ 已修复 |
+| `frontend/src/components/Timeline/Timeline.tsx:38` | `msg.meta?.variant` → `msg.meta?.variant !== undefined` 严格存在性检查 | ✅ 已修复 |
+| `src/web_server.py::push_message` | host 消息附加 `meta: {variant: "normal"}` 让前端正确路由 | ✅ 已修复 |
+| `frontend/src/components/Preset/PresetSelector.tsx` | agent 名映射为中文显示（Architect→架构师 等） | ✅ 已修复 |
+| `src/config/agents.yaml` | Architect prompt 移除"三年后"表述；新增 `document_design` preset | ✅ 已修复 |
+| `src/config/agents_optimized.yaml` | 同步 agents.yaml 全部变更 + 同步策略注释 | ✅ 已修复 |
+| `src/blueprint.py` | fallback blueprint name → "本次讨论总览"；output_contract 写入 final_solution | ✅ 已修复 |
+| `src/blueprint_export.py` | 新增 `_sanitize_filename` 清洗 markdown 链接语法 | ✅ 已修复 |
+| `frontend/src/components/Blueprint/BlueprintPanel.tsx` | warnings 展示为 info 提示而非错误 | ✅ 已修复 |
+| `src/reporting.py` | 报告结构重写：概述→讨论设置→方案详情→评审结论→讨论过程 | ✅ 已修复 |
 
 ---
 
@@ -179,74 +214,23 @@ agent-discussion -c src/config/discussion_only.yaml -t "议题" -v
 
 ## 6. 当前进行中的工作
 
+### 2026-05-05：10 项 UX/功能修复完成
+
+已完成计划 `docs/superpowers/plans/2026-05-05-multi-issue-fix.md` 全部修复，包括：会话列表标题 bug（#10）、InputBar textarea、Timeline 渲染、Preset 中文名、Architect prompt、document_design preset、Blueprint fallback、导出路径清理、报告结构重写。
+
+该批改动已进入收尾验证；后续维护以 `src/config/agents.yaml` 为权威配置，`agents_optimized.yaml` 只作为同步变体。
+
+### 历史
+
 参见：
 - `docs/plans/2026-04-24-moderator-brainstorm-design.md` 末尾的「实施进度」章节
 - `KNOWN_ISSUES.md` 中标记 `status: 🚧 进行中` 或 `📋 待办` 的条目
 
 2026-04-25 已完成：
 1. 项目迁移到 `/Users/lvzhibo/Agent/agent-discussion`
-2. 清理 `.omx` / `.omc` / `.Codex` / 缓存 / 构建产物，保留 `docs/`、`report/`、`sessions/`
+2. 清理 `.omx` / `.omc` / `.claude` / 缓存 / 构建产物，保留 `docs/`、`report/`、`sessions/`
 3. 默认配置改为环境变量读取 key，避免把本地密钥纳入 Git
 4. 后端入口改为可安装模块 `src.web_entry:main`
-
----
-
-## 🟡 中优先级（影响完整性 / 可发现性）
-
-### #4 📋 设计文档阶段 3 / 4 未完成（前端 Brainstorm UI）
-
-**状态**：📋 待办
-
-后端（阶段 2）`brainstorm.py` + `models.py::BrainstormConfig` + `web_server.py` 的 `wait_user_brainstorm_answer` / `pending_brainstorm_answers` 已落地。
-
-但前端缺：
-
-- `frontend/src/components/Brainstorm/ModeratorQuestion.tsx`
-- `frontend/src/components/Brainstorm/ModeratorQuestion.module.css`
-- `frontend/src/components/Brainstorm/TopicConfirm.tsx`
-- `frontend/src/components/Brainstorm/TopicConfirm.module.css`
-- `App.tsx` 路由 `phase === 'brainstorming'`
-- `useWebSocket.ts` 处理 `moderator_question` / `topic_refined` / `brainstorm_timeout`
-
-**结果**：用户在 Web UI 看不到议题精炼对话框，只能依赖 `brainstorm_skip`。
-
-**建议下一步**：见 `docs/plans/2026-04-24-moderator-brainstorm-design.md` 阶段 3。
-
----
-
-### #5 📋 `agent_meta` 事件未推送，前端无法显示 agent 模型 / 主持人 badge
-
-**状态**：📋 待办
-
-设计文档定义了 `agent_meta` 事件（会话开始时一次性推送 `[{name, model, role, is_moderator}]`），但 `web_server.py` 当前**未实现该推送**。
-
-**影响**：
-
-- AC1.1 / AC1.2 / AC1.3 全部未满足
-- 前端 `AgentStatusPanel` 即使加了 model 字段渲染逻辑也拿不到数据
-
-**建议下一步**：
-
-1. 在 `web_server.py::_run_session_pipeline` 进入 brainstorming/discussion 阶段前推 `agent_meta`
-2. 数据来源：`session.config.agents`（含 `name` / `model` / `service_type`），主持人靠 `name == config.manager_config.name` 判定
-
----
-
-### #6 📋 FastAPI 后端未启用 `--reload`，开发体验差
-
-**状态**：📋 待办
-
-`run_web.py` / `start.sh` 当前直接 `uvicorn.run(app)`，没有 `--reload` 参数。
-
-**影响**：每次改 `src/*.py` 都要手动 `Ctrl+C` 重启，**这是 #1 / #2 修复"未生效"的最可能根因**。
-
-**建议下一步**：在 `start.sh` 或 `run_web.py` 改成：
-
-```bash
-uvicorn src.web_server:app --reload --reload-dir src --host 0.0.0.0 --port 8001
-```
-
-注意 `--reload-dir` 要排除 `sessions/` 和 `report/`，否则保存会话会触发重启。
 
 ---
 

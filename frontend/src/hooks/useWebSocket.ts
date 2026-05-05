@@ -3,7 +3,8 @@ import type {
   AgentInfo, Message, PhaseEvent, VotingResult,
   AgentState, RoundProgress, PipelineLog, DiscussionConfig,
   DiscussionPhase, BrainstormQuestion, BrainstormAnswer,
-  TopicRefinedPayload, BrainstormFailureState,
+  TopicRefinedPayload, BrainstormFailureState, AgentSystemBlueprint,
+  PresetRecommendation,
 } from '../types';
 
 export type ConnectionStatus = 'disconnected' | 'connected' | 'error';
@@ -35,6 +36,8 @@ export interface WebSocketState {
   agents: AgentInfo[];
   agentStates: Record<string, AgentState>;
   votingResult: VotingResult | null;
+  blueprint: AgentSystemBlueprint | null;
+  blueprintWarnings: string[];
   isReady: boolean;
   currentTopic: string;
   currentPhase: DiscussionPhase;
@@ -44,16 +47,18 @@ export interface WebSocketState {
   savedPath: string | null;
   pendingQuestion: BrainstormQuestion | null;
   pendingTopicRefined: TopicRefinedPayload | null;
+  pendingPreset: PresetRecommendation | null;
   brainstormFailure: BrainstormFailureState | null;
   isBrainstormSubmitting: boolean;
 
   send: (data: Record<string, unknown>) => void;
-  startDiscussion: (topic: string, config?: DiscussionConfig) => void;
+  startDiscussion: (topic: string, config?: DiscussionConfig, sessionId?: string) => void;
   sendFollowup: (message: string) => void;
   saveReport: (topic: string) => void;
   submitBrainstormAnswer: (answer: BrainstormAnswer) => void;
   skipBrainstorm: () => void;
   confirmTopic: () => void;
+  confirmPreset: (presetName: string) => void;
   refineTopicAgain: () => void;
   dismissBrainstormFailure: () => void;
 }
@@ -69,6 +74,8 @@ export function useWebSocket(): WebSocketState {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [agentStates, setAgentStates] = useState<Record<string, AgentState>>({});
   const [votingResult, setVotingResult] = useState<VotingResult | null>(null);
+  const [blueprint, setBlueprint] = useState<AgentSystemBlueprint | null>(null);
+  const [blueprintWarnings, setBlueprintWarnings] = useState<string[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [currentTopic, setCurrentTopic] = useState('');
   const [currentPhase, setCurrentPhase] = useState<DiscussionPhase>('idle');
@@ -78,6 +85,7 @@ export function useWebSocket(): WebSocketState {
   const [savedPath, setSavedPath] = useState<string | null>(null);
   const [pendingQuestion, setPendingQuestion] = useState<BrainstormQuestion | null>(null);
   const [pendingTopicRefined, setPendingTopicRefined] = useState<TopicRefinedPayload | null>(null);
+  const [pendingPreset, setPendingPreset] = useState<PresetRecommendation | null>(null);
   const [brainstormFailure, setBrainstormFailure] = useState<BrainstormFailureState | null>(null);
   const [isBrainstormSubmitting, setIsBrainstormSubmitting] = useState(false);
   const messageIdRef = useRef(0);
@@ -141,7 +149,7 @@ export function useWebSocket(): WebSocketState {
         case 'phase': {
           const phaseValue = data.phase as string;
           setPhases(prev => [...prev, { phase: phaseValue, label: data.label, timestamp: Date.now() }]);
-          if (['brainstorming', 'discussion', 'synthesis', 'voting', 'followup', 'followup_round'].includes(phaseValue)) {
+          if (['brainstorming', 'discussion', 'synthesis', 'blueprint', 'voting', 'followup', 'followup_round'].includes(phaseValue)) {
             setCurrentPhase(phaseValue as DiscussionPhase);
           }
           break;
@@ -183,6 +191,15 @@ export function useWebSocket(): WebSocketState {
 
         case 'voting_result':
           setVotingResult(data as VotingResult);
+          break;
+
+        case 'blueprint':
+          setBlueprint(data.blueprint as AgentSystemBlueprint);
+          setBlueprintWarnings(data.warnings ?? []);
+          break;
+
+        case 'blueprint_warning':
+          setBlueprintWarnings(data.warnings ?? []);
           break;
 
         case 'round_progress':
@@ -227,12 +244,29 @@ export function useWebSocket(): WebSocketState {
         case 'topic_refined':
           setPendingTopicRefined(data as TopicRefinedPayload);
           setPendingQuestion(null);
+          setPendingPreset(null);
+          setIsBrainstormSubmitting(false);
+          break;
+
+        case 'preset_recommended':
+          setPendingPreset({
+            recommended: data.preset_name,
+            presets: data.all_presets ?? [],
+          });
+          setPendingQuestion(null);
+          setPendingTopicRefined(null);
+          setIsBrainstormSubmitting(false);
+          break;
+
+        case 'preset_confirmed':
+          setPendingPreset(null);
           setIsBrainstormSubmitting(false);
           break;
 
         case 'brainstorm_timeout':
           setBrainstormFailure({ kind: 'timeout' });
           setPendingQuestion(null);
+          setPendingPreset(null);
           setIsBrainstormSubmitting(false);
           break;
 
@@ -241,6 +275,8 @@ export function useWebSocket(): WebSocketState {
           setMessages([]);
           setPhases([]);
           setVotingResult(null);
+          setBlueprint(null);
+          setBlueprintWarnings([]);
           setIsReady(false);
           setError(null);
           setSavedPath(null);
@@ -249,6 +285,7 @@ export function useWebSocket(): WebSocketState {
           setAgentStates({});
           setPendingQuestion(null);
           setPendingTopicRefined(null);
+          setPendingPreset(null);
           setBrainstormFailure(null);
           setIsBrainstormSubmitting(false);
           setCurrentPhase('brainstorming');
@@ -258,6 +295,7 @@ export function useWebSocket(): WebSocketState {
           setIsReady(true);
           setPendingQuestion(null);
           setPendingTopicRefined(null);
+          setPendingPreset(null);
           setIsBrainstormSubmitting(false);
           setCurrentPhase('done');
           break;
@@ -299,8 +337,8 @@ export function useWebSocket(): WebSocketState {
     }
   }, []);
 
-  const startDiscussion = useCallback((topic: string, config?: DiscussionConfig) => {
-    send({ action: 'start', topic, config: config ?? undefined });
+  const startDiscussion = useCallback((topic: string, config?: DiscussionConfig, sessionId?: string) => {
+    send({ action: 'start', topic, config: config ?? undefined, session_id: sessionId });
   }, [send]);
 
   const sendFollowup = useCallback((message: string) => {
@@ -320,6 +358,7 @@ export function useWebSocket(): WebSocketState {
   const skipBrainstorm = useCallback(() => {
     setPendingQuestion(null);
     setPendingTopicRefined(null);
+    setPendingPreset(null);
     setBrainstormFailure({ kind: 'skipped' });
     setIsBrainstormSubmitting(false);
     send({ action: 'brainstorm_skip' });
@@ -331,8 +370,15 @@ export function useWebSocket(): WebSocketState {
     send({ action: 'topic_confirmed', accept: true });
   }, [send]);
 
+  const confirmPreset = useCallback((presetName: string) => {
+    setPendingPreset(null);
+    setIsBrainstormSubmitting(false);
+    send({ action: 'preset_confirmed', preset_name: presetName });
+  }, [send]);
+
   const refineTopicAgain = useCallback(() => {
     setPendingTopicRefined(null);
+    setPendingPreset(null);
     setIsBrainstormSubmitting(true);
     send({ action: 'topic_refine_again' });
   }, [send]);
@@ -343,11 +389,11 @@ export function useWebSocket(): WebSocketState {
 
   return {
     connectionStatus, messages, phases, agents, agentStates,
-    votingResult, isReady, currentTopic, currentPhase,
+    votingResult, blueprint, blueprintWarnings, isReady, currentTopic, currentPhase,
     roundProgress, logs, error, savedPath,
-    pendingQuestion, pendingTopicRefined, brainstormFailure, isBrainstormSubmitting,
+    pendingQuestion, pendingTopicRefined, pendingPreset, brainstormFailure, isBrainstormSubmitting,
     send, startDiscussion, sendFollowup, saveReport,
-    submitBrainstormAnswer, skipBrainstorm, confirmTopic, refineTopicAgain,
+    submitBrainstormAnswer, skipBrainstorm, confirmTopic, confirmPreset, refineTopicAgain,
     dismissBrainstormFailure,
   };
 }

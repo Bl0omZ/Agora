@@ -15,9 +15,12 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from semantic_kernel.contents import AuthorRole, ChatHistory, ChatMessageContent
 
+from .blueprint import AgentSystemBlueprint, generate_blueprint
+from .blueprint_export import ExportFormat, export_blueprint
 from .brainstorm import BrainstormSession, SkipBrainstormException
 from .discussion import (
     _strip_hidden_reasoning,
@@ -25,7 +28,7 @@ from .discussion import (
     run_discussion,
     run_followup,
 )
-from .loader import create_agent, create_service, load_config
+from .loader import create_agent, create_agent_with_scope, create_service, load_config, resolve_preset
 from .models import AppConfig
 from .reporting import save_report
 from .voting import run_voting
@@ -40,6 +43,7 @@ FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
 # Key 优先使用前端传入的 client_session_id，兼容旧客户端时使用 id(websocket)。
 pending_brainstorm_answers: dict[str, asyncio.Future] = {}
 pending_topic_confirmations: dict[str, asyncio.Future] = {}
+pending_preset_confirmations: dict[str, asyncio.Future] = {}
 
 
 # Path-traversal hardening: only allow alphanumerics, dot, underscore, dash.
@@ -105,6 +109,10 @@ class SessionState:
         self.dispatch_state: dict[str, Any] | None = None
         self.final_solution: str | None = None
         self.review_result = None
+        self.blueprint = None
+        self.blueprint_generation_status: str = "idle"
+        self.blueprint_warnings: list[str] = []
+        self.session_id: str | None = None
 
         manager_cfg = config.agents[config.manager_service_index]
         self.manager_service = create_service(manager_cfg)
@@ -116,12 +124,18 @@ class SessionState:
         for index, agent_cfg in enumerate(config.agents):
             if index == config.manager_service_index:
                 continue
-            agent = create_agent(agent_cfg)
             if agent_cfg.final_only:
+                agent = create_agent(agent_cfg)
                 self.final_agents.append((agent_cfg, agent))
             else:
+                agent = create_agent_with_scope(agent_cfg)
                 self.discussion_agents.append(agent)
                 self.discussion_agent_map[agent_cfg.name] = agent
+
+
+class BlueprintExportRequest(BaseModel):
+    format: ExportFormat
+    blueprint: AgentSystemBlueprint
 
 
 def _interaction_key(websocket: WebSocket, data: dict[str, Any] | None = None) -> str:
@@ -216,6 +230,25 @@ async def wait_user_topic_confirmation(
         pending_topic_confirmations.pop(session_id, None)
 
 
+async def wait_user_preset_confirmation(
+    session_id: str,
+    timeout_seconds: int,
+    default_preset: str,
+) -> str:
+    """Wait for preset_confirmed. Timeout continues with the recommended preset."""
+    loop = asyncio.get_event_loop()
+    fut: asyncio.Future = loop.create_future()
+    pending_preset_confirmations[session_id] = fut
+    try:
+        result = await asyncio.wait_for(fut, timeout=timeout_seconds)
+        return str(result or default_preset).strip() or default_preset
+    except asyncio.TimeoutError:
+        logger.info("preset confirmation timed out; continuing with %s", default_preset)
+        return default_preset
+    finally:
+        pending_preset_confirmations.pop(session_id, None)
+
+
 def _format_brainstorm_answer(data: dict[str, Any]) -> str:
     """Convert BrainstormAnswer payloads into compact text for the LLM."""
     if data.get("answer"):
@@ -255,19 +288,136 @@ def _discussion_agent_configs(config: AppConfig) -> list[Any]:
     ]
 
 
-def _default_expected_final_output() -> str:
-    return "输出清晰、可直接使用的最终推荐方案，并列出必要的取舍说明和待决策项。"
+def _preset_agent_names(config: AppConfig, preset_name: str) -> list[str]:
+    return [agent.name for agent in resolve_preset(config, preset_name)]
 
 
-def _fallback_dispatch_tasks(config: AppConfig) -> list[dict[str, str]]:
+def _resolve_recommended_preset(config: AppConfig, candidate: Any) -> str | None:
+    if not config.presets:
+        return None
+    candidate_name = str(candidate or "").strip()
+    if candidate_name in config.presets:
+        return candidate_name
+    if config.default_preset and config.default_preset in config.presets:
+        return config.default_preset
+    return next(iter(config.presets), None)
+
+
+def _preset_info(config: AppConfig, preset_name: str) -> dict[str, Any]:
+    preset = config.presets[preset_name]
+    agent_map = {agent.name: agent for agent in _discussion_agent_configs(config)}
+    return {
+        "name": preset_name,
+        "label": preset.label,
+        "description": preset.description,
+        "agents": [
+            {
+                "name": agent_name,
+                "description": agent_map[agent_name].description,
+                "model": agent_map[agent_name].model,
+            }
+            for agent_name in preset.agents
+            if agent_name in agent_map
+        ],
+    }
+
+
+def _preset_recommendation_payload(config: AppConfig, preset_name: str) -> dict[str, Any]:
+    recommended = _preset_info(config, preset_name)
+    return {
+        "type": "preset_recommended",
+        "preset_name": preset_name,
+        "preset_label": recommended["label"],
+        "preset_description": recommended["description"],
+        "agents": recommended["agents"],
+        "all_presets": [
+            _preset_info(config, name)
+            for name in config.presets.keys()
+        ],
+    }
+
+
+def _default_tasks_for_agents(agent_configs: list[Any]) -> list[dict[str, str]]:
     return [
         {
             "agent_name": agent_cfg.name,
             "sub_topic": "围绕精炼议题给出专业判断。",
             "expected_output": agent_cfg.description,
         }
-        for agent_cfg in _discussion_agent_configs(config)
+        for agent_cfg in agent_configs
     ]
+
+
+def _apply_preset_to_dispatch_state(
+    config: AppConfig,
+    dispatch_state: dict[str, Any],
+    preset_name: str,
+) -> dict[str, Any]:
+    """Constrain an existing dispatch state to the confirmed preset."""
+    if not config.presets or dispatch_state.get("execution_mode") == "direct":
+        return dispatch_state
+
+    resolved_name = _resolve_recommended_preset(config, preset_name)
+    if not resolved_name:
+        return dispatch_state
+
+    preset_agent_configs = resolve_preset(config, resolved_name)
+    preset_names = [agent.name for agent in preset_agent_configs]
+    preset_name_set = set(preset_names)
+    current_tasks = dispatch_state.get("dispatch_plan", {}).get("tasks") or []
+    invalid_task_seen = any(
+        task.get("agent_name") not in preset_name_set
+        for task in current_tasks
+        if isinstance(task, dict)
+    )
+    tasks_by_name = {
+        task["agent_name"]: task
+        for task in current_tasks
+        if isinstance(task, dict) and task.get("agent_name") in preset_name_set
+    }
+
+    if invalid_task_seen or not tasks_by_name:
+        tasks = _default_tasks_for_agents(preset_agent_configs)
+        execution_mode = "panel"
+    else:
+        tasks = [tasks_by_name[name] for name in preset_names if name in tasks_by_name]
+        execution_mode = dispatch_state.get("execution_mode") or "panel"
+        if len(tasks) < len(preset_names):
+            execution_mode = "focused"
+
+    selected_agents = [task["agent_name"] for task in tasks]
+    agent_tasks = {
+        task["agent_name"]: {
+            "task": task["sub_topic"],
+            "expected_output": task.get("expected_output") or "",
+        }
+        for task in tasks
+    }
+
+    dispatch_plan = dict(dispatch_state.get("dispatch_plan") or {})
+    dispatch_plan.update({
+        "tasks": tasks,
+        "execution_mode": execution_mode,
+        "selected_agents": selected_agents,
+        "preset_name": resolved_name,
+    })
+    dispatch_state.update({
+        "preset_name": resolved_name,
+        "preset": _preset_info(config, resolved_name),
+        "execution_mode": execution_mode,
+        "dispatch_plan": dispatch_plan,
+        "selected_agents": selected_agents,
+        "agent_tasks": agent_tasks,
+    })
+    return dispatch_state
+
+
+def _default_expected_final_output() -> str:
+    return "输出清晰、可直接使用的最终推荐方案，并列出必要的取舍说明和待决策项。"
+
+
+def _fallback_dispatch_tasks(config: AppConfig, preset_name: str | None = None) -> list[dict[str, str]]:
+    return _default_tasks_for_agents(resolve_preset(config, preset_name))
 
 
 def _build_dispatch_state(
@@ -311,6 +461,7 @@ def _build_dispatch_state(
     requested_mode = str(raw_plan.get("execution_mode") or raw_plan.get("mode") or "").strip().lower()
     if requested_mode not in {"direct", "focused", "panel"}:
         requested_mode = ""
+    recommended_preset = _resolve_recommended_preset(config, raw_plan.get("recommended_preset"))
 
     if requested_mode == "direct":
         execution_mode = "direct"
@@ -324,7 +475,7 @@ def _build_dispatch_state(
         execution_mode = "direct"
     else:
         execution_mode = "panel"
-        tasks = _fallback_dispatch_tasks(config)
+        tasks = _fallback_dispatch_tasks(config, recommended_preset)
         selected_agents = [task["agent_name"] for task in tasks]
 
     expected_final_output = str(
@@ -347,6 +498,8 @@ def _build_dispatch_state(
         "selected_agents": selected_agents,
         "expected_final_output": expected_final_output,
     }
+    if recommended_preset:
+        dispatch_plan["recommended_preset"] = recommended_preset
     return {
         "original_topic": original_topic,
         "refined_topic": refined_topic or original_topic,
@@ -357,6 +510,7 @@ def _build_dispatch_state(
         "selected_agents": selected_agents,
         "agent_tasks": agent_tasks,
         "expected_final_output": expected_final_output,
+        "recommended_preset": recommended_preset,
         "final_solution": None,
         "review_result": None,
     }
@@ -380,6 +534,11 @@ def _build_brainstorm_config(config: AppConfig) -> Any:
         for agent_cfg in _discussion_agent_configs(config)
     ]
     roster = "\n".join(agent_lines) or "（无可派发讨论 agent）"
+    preset_lines = [
+        f"- {name}: {preset.label} — {preset.description}"
+        for name, preset in config.presets.items()
+    ]
+    preset_roster = "\n".join(preset_lines)
     system_prompt = (
         config.brainstorm.system_prompt
         + "\n\nAvailable discussion agents. dispatch_plan.tasks[].agent_name MUST use one of these exact names only:\n"
@@ -387,6 +546,12 @@ def _build_brainstorm_config(config: AppConfig) -> Any:
         + "\n\nWhen finalizing, also include dispatch_plan.execution_mode as direct, focused, or panel, "
           "and dispatch_plan.expected_final_output describing the final answer shape."
     )
+    if preset_roster:
+        system_prompt += (
+            "\n\nAvailable discussion presets. If discussion is not direct, choose the best match and include "
+            "dispatch_plan.recommended_preset using one of these exact names:\n"
+            + preset_roster
+        )
     return config.brainstorm.model_copy(update={"system_prompt": system_prompt})
 
 
@@ -534,6 +699,37 @@ async def _run_synthesis_phase(websocket: WebSocket, session: SessionState, topi
     return final_solution
 
 
+async def _run_blueprint_phase(websocket: WebSocket, session: SessionState, topic: str) -> AgentSystemBlueprint:
+    logger.info("phase.blueprint.start")
+    session.blueprint_generation_status = "running"
+    await _send_json(websocket, {"type": "phase", "phase": "blueprint", "label": "Agent System Blueprint"})
+
+    result = await generate_blueprint(
+        service=session.manager_service,
+        session_id=getattr(session, "session_id", None),
+        topic=topic,
+        final_solution=session.final_solution or session.discussion_result or "",
+        dispatch_state=session.dispatch_state,
+        discussion_transcript=session.discussion_transcript,
+    )
+    session.blueprint = result.blueprint
+    session.blueprint_generation_status = "done"
+    session.blueprint_warnings = result.warnings
+
+    if session.dispatch_state is not None:
+        session.dispatch_state["blueprint"] = _to_jsonable(result.blueprint)
+
+    await _send_json(websocket, {
+        "type": "blueprint",
+        "blueprint": result.blueprint,
+        "warnings": result.warnings,
+    })
+    if result.warnings:
+        await _send_json(websocket, {"type": "blueprint_warning", "warnings": result.warnings})
+    logger.info("phase.blueprint.done warnings=%d", len(result.warnings))
+    return result.blueprint
+
+
 async def _send_unselected_statuses(
     websocket: WebSocket,
     session: SessionState,
@@ -548,6 +744,26 @@ async def _send_unselected_statuses(
                 "name": agent_cfg.name,
                 "status": "skipped",
             })
+
+
+async def _send_active_agent_meta(websocket: WebSocket, session: SessionState) -> None:
+    """Send metadata for the agents that will participate in this session."""
+    selected = set((session.dispatch_state or {}).get("selected_agents") or [])
+    meta = []
+    for index, agent_cfg in enumerate(session.config.agents):
+        is_moderator = index == session.config.manager_service_index
+        is_final = agent_cfg.final_only
+        if not is_moderator and not is_final and agent_cfg.name not in selected:
+            continue
+        meta.append({
+            "name": agent_cfg.name,
+            "model": agent_cfg.model,
+            "role": agent_cfg.description,
+            "description": agent_cfg.description,
+            "final_only": agent_cfg.final_only,
+            "is_moderator": is_moderator,
+        })
+    await _send_json(websocket, {"type": "agent_meta", "agents": meta})
 
 
 def _format_complexity_content(complexity: dict[str, Any]) -> str:
@@ -615,12 +831,20 @@ async def _run_brainstorming_phase(
             content=str(question_payload.get("question") or ""),
             meta={"variant": "normal"},
         )
-        return await wait_user_brainstorm_answer(
+        answer = await wait_user_brainstorm_answer(
             interaction_key,
             websocket,
             question_payload,
             config.brainstorm.answer_timeout_seconds,
         )
+        await _send_json(websocket, {
+            "type": "message",
+            "phase": "brainstorming",
+            "name": "用户",
+            "role": "user",
+            "content": answer,
+        })
+        return answer
 
     while True:
         brainstorm = BrainstormSession(
@@ -699,6 +923,33 @@ async def _run_brainstorming_phase(
                 meta={"variant": "normal"},
             )
             continue
+
+        if config.presets and dispatch_state["execution_mode"] != "direct":
+            recommended_preset = _resolve_recommended_preset(
+                config,
+                dispatch_state.get("recommended_preset"),
+            )
+            if recommended_preset:
+                await _send_json(
+                    websocket,
+                    _preset_recommendation_payload(config, recommended_preset),
+                )
+                confirmed_preset = await wait_user_preset_confirmation(
+                    interaction_key,
+                    config.brainstorm.answer_timeout_seconds,
+                    recommended_preset,
+                )
+                await _send_json(
+                    websocket,
+                    {"type": "preset_confirmed", "preset_name": confirmed_preset},
+                )
+                dispatch_state = _apply_preset_to_dispatch_state(
+                    config,
+                    dispatch_state,
+                    confirmed_preset,
+                )
+                session.dispatch_state = dispatch_state
+                await _send_active_agent_meta(websocket, session)
         return dispatch_state
 
 
@@ -784,13 +1035,21 @@ async def _run_session_pipeline(
                 display_name = msg.name or "用户"
             else:
                 display_name = msg.name or "匿名"
+            # Mark host messages with meta so frontend can route them to HostMessage.
+            # NOTE: session is captured by closure and must remain valid for the
+            # lifetime of this inner function (guaranteed since push_message is
+            # scoped to _run_session_pipeline and never extracted).
+            is_host = (display_name == session.manager_config.name)
+            msg_meta = getattr(msg, "metadata", None)
+            if is_host and not msg_meta:
+                msg_meta = {"variant": "normal"}
             await _send_json(websocket, {
                 "type": "message",
                 "phase": phase,
                 "name": display_name,
                 "role": role_value,
                 "content": msg.content or "",
-                "meta": getattr(msg, "metadata", None),
+                "meta": msg_meta,
             })
 
         # Use asyncio.Queue as bridge: the callback from GroupChatOrchestration is sync
@@ -882,6 +1141,8 @@ async def _run_session_pipeline(
         "type": "summary",
         "content": final_solution,
     })
+
+    await _run_blueprint_phase(websocket, session, active_topic)
 
     # --- Voting phase ---
     review_agents = _selected_discussion_agents(session)
@@ -986,6 +1247,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                         await pipeline_task
 
                 session = SessionState(app_config)
+                session.session_id = str(data.get("session_id") or "").strip() or None
                 await _send_json(websocket, {"type": "started", "topic": topic})
                 interaction_key = _interaction_key(websocket, data)
                 pipeline_task = asyncio.create_task(run_pipeline_safe(session, topic, interaction_key))
@@ -1098,6 +1360,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     discussion_transcript=session.discussion_transcript,
                     voting_result=session.voting_result,
                     dispatch_state=session.dispatch_state,
+                    blueprint=session.blueprint,
                 )
                 await _send_json(websocket, {
                     "type": "saved",
@@ -1142,6 +1405,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 if fut is not None and not fut.done():
                     fut.set_result("refine_again")
 
+            elif action == "preset_confirmed":
+                _pending_key, fut = _find_pending_future(pending_preset_confirmations, websocket, data)
+                if fut is not None and not fut.done():
+                    fut.set_result(str(data.get("preset_name") or "").strip())
+
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
     except Exception as exc:
@@ -1177,17 +1445,7 @@ async def list_reports():
         size_bytes = stat.st_size
         modified_at = stat.st_mtime
 
-        topic = ""
-        try:
-            with open(md_file, 'r', encoding='utf-8') as f:
-                for i, line in enumerate(f):
-                    if i >= 5:
-                        break
-                    if line.startswith('- 讨论话题：'):
-                        topic = line[len('- 讨论话题：'):].strip()
-                        break
-        except Exception:
-            pass
+        topic = _extract_report_topic(md_file)
 
         reports.append({
             'filename': filename,
@@ -1199,6 +1457,26 @@ async def list_reports():
 
     reports.sort(key=lambda x: x['modified_at'], reverse=True)
     return {"reports": reports}
+
+
+def _extract_report_topic(md_file: Path) -> str:
+    """Extract topic from current and legacy markdown report formats."""
+    heading_topic = ""
+    try:
+        with open(md_file, 'r', encoding='utf-8') as f:
+            for i, line in enumerate(f):
+                if i >= 10:
+                    break
+                stripped = line.strip()
+                if i == 0 and stripped.startswith("# "):
+                    heading = stripped[2:].strip()
+                    if heading and heading != "讨论报告":
+                        heading_topic = heading
+                if stripped.startswith('- 讨论话题：'):
+                    return stripped[len('- 讨论话题：'):].strip()
+    except Exception:
+        return ""
+    return heading_topic
 
 
 @app.get('/api/reports/{filename}')
@@ -1213,6 +1491,12 @@ async def get_report(filename: str):
         return PlainTextResponse("报告不存在", status_code=404)
     content = file_path.read_text(encoding='utf-8')
     return PlainTextResponse(content)
+
+
+@app.post("/api/blueprint/export")
+async def export_blueprint_endpoint(request: BlueprintExportRequest):
+    result = export_blueprint(request.blueprint, request.format)
+    return result.model_dump(mode="json")
 
 
 @app.post('/api/sessions')

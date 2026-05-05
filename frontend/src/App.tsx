@@ -1,14 +1,21 @@
 import { Suspense, lazy, useState, useEffect, useCallback, useRef } from 'react';
-import type { ReportEntry, DiscussionConfig, SessionData } from './types';
+import type { ReportEntry, DiscussionConfig, SessionData, BlueprintExportFormat } from './types';
 import { SCHEMA_VERSION } from './constants';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useSession } from './hooks/useSession';
-import { exportAsMarkdown, downloadMarkdown, printAsPdf, captureScreenshot } from './utils/export';
+import {
+  exportAsMarkdown,
+  downloadMarkdown,
+  printAsPdf,
+  captureScreenshot,
+  exportBlueprint,
+} from './utils/export';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { TopBar } from './components/TopBar/TopBar';
 import { ProgressBar } from './components/Progress/ProgressBar';
 import { AgentStatusPanel } from './components/Progress/AgentStatusPanel';
 import { Timeline } from './components/Timeline/Timeline';
+
 import { InputBar } from './components/InputBar/InputBar';
 import { Welcome } from './components/Welcome/Welcome';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
@@ -21,6 +28,7 @@ import {
   BrainstormSkipConfirm,
 } from './components/Brainstorm/BrainstormStates';
 import { TopicConfirmCard } from './components/Brainstorm/TopicConfirmCard';
+import { PresetSelector } from './components/Preset/PresetSelector';
 import styles from './App.module.css';
 
 type PendingAction =
@@ -85,15 +93,25 @@ function MainApp() {
         messages: ws.messages,
         phases: ws.phases,
         votingResult: ws.votingResult,
+        blueprint: ws.blueprint,
+        blueprintWarnings: ws.blueprintWarnings,
         logs: ws.logs,
         savedPath: ws.savedPath,
       });
     }
-  }, [ws.messages, ws.phases, ws.votingResult, ws.logs, ws.savedPath]);
+  }, [
+    ws.messages,
+    ws.phases,
+    ws.votingResult,
+    ws.blueprint,
+    ws.blueprintWarnings,
+    ws.logs,
+    ws.savedPath,
+  ]);
 
   // Sync to server when discussion ends
   useEffect(() => {
-    if (ws.isReady && session.currentSessionId) {
+    if (ws.isReady && session.currentSessionId && !session.isHistoryMode) {
       const data = {
         schemaVersion: SCHEMA_VERSION,
         id: session.currentSessionId,
@@ -101,6 +119,8 @@ function MainApp() {
         messages: ws.messages,
         phases: ws.phases,
         votingResult: ws.votingResult,
+        blueprint: ws.blueprint,
+        blueprintWarnings: ws.blueprintWarnings,
         logs: ws.logs,
         savedPath: ws.savedPath,
         createdAt: Date.now(),
@@ -108,12 +128,25 @@ function MainApp() {
       };
       session.syncToServer(data);
     }
-  }, [ws.isReady]);
+  }, [
+    ws.isReady,
+    session.currentSessionId,
+    session.isHistoryMode,
+    session.syncToServer,
+    ws.currentTopic,
+    ws.messages,
+    ws.phases,
+    ws.votingResult,
+    ws.blueprint,
+    ws.blueprintWarnings,
+    ws.logs,
+    ws.savedPath,
+  ]);
 
   const handleStart = useCallback((topic: string) => {
-    session.createSession(topic);
+    const sessionId = session.createSession(topic);
     setHistoryData(null);
-    ws.startDiscussion(topic, config);
+    ws.startDiscussion(topic, config, sessionId);
   }, [ws, session, config]);
 
   const handleFollowup = useCallback((message: string) => {
@@ -121,9 +154,18 @@ function MainApp() {
   }, [ws]);
 
   const handleExportMarkdown = useCallback(() => {
-    const content = exportAsMarkdown(ws.currentTopic, ws.messages, ws.votingResult);
-    downloadMarkdown(content, `${ws.currentTopic || 'discussion'}.md`);
-  }, [ws.currentTopic, ws.messages, ws.votingResult]);
+    const topic = session.isHistoryMode && historyData ? historyData.topic : ws.currentTopic;
+    const messages = session.isHistoryMode && historyData ? historyData.messages : ws.messages;
+    const votingResult = session.isHistoryMode && historyData ? historyData.votingResult : ws.votingResult;
+    const content = exportAsMarkdown(topic, messages, votingResult);
+    downloadMarkdown(content, `${topic || 'discussion'}.md`);
+  }, [
+    session.isHistoryMode,
+    historyData,
+    ws.currentTopic,
+    ws.messages,
+    ws.votingResult,
+  ]);
 
   const handleExportPdf = useCallback(() => {
     printAsPdf();
@@ -138,6 +180,16 @@ function MainApp() {
   const handleSaveReport = useCallback(() => {
     ws.saveReport(ws.currentTopic);
   }, [ws]);
+
+  const handleExportBlueprint = useCallback(async (format: BlueprintExportFormat) => {
+    const blueprint = session.isHistoryMode ? historyData?.blueprint : ws.blueprint;
+    if (!blueprint) return;
+    try {
+      await exportBlueprint(blueprint, format);
+    } catch (error) {
+      alert(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  }, [session.isHistoryMode, historyData?.blueprint, ws.blueprint]);
 
   // --- Unsaved-work guard ---
   // 当前会话有内容、未保存为报告、且不是历史模式时，"离开" 需要确认
@@ -214,6 +266,8 @@ function MainApp() {
   const displayMessages = isViewingHistory ? historyData.messages : ws.messages;
   const displayTopic = isViewingHistory ? historyData.topic : ws.currentTopic;
   const displayVotingResult = isViewingHistory ? historyData.votingResult : ws.votingResult;
+  const displayBlueprint = isViewingHistory ? historyData.blueprint ?? null : ws.blueprint;
+  const displayBlueprintWarnings = isViewingHistory ? historyData.blueprintWarnings ?? [] : ws.blueprintWarnings;
 
   // Find thinking agent
   const thinkingAgent = Object.values(ws.agentStates).find(a => a.status === 'thinking')?.name ?? null;
@@ -271,6 +325,9 @@ function MainApp() {
               <Timeline
                 messages={displayMessages}
                 votingResult={displayVotingResult}
+                blueprint={displayBlueprint}
+                blueprintWarnings={displayBlueprintWarnings}
+                onExportBlueprint={handleExportBlueprint}
                 thinkingAgent={isViewingHistory ? null : thinkingAgent}
               />
             </div>
@@ -287,6 +344,13 @@ function MainApp() {
                 payload={ws.pendingTopicRefined}
                 onConfirm={ws.confirmTopic}
                 onRefine={ws.refineTopicAgain}
+              />
+            )}
+
+            {isActive && !isViewingHistory && ws.pendingPreset && (
+              <PresetSelector
+                recommendation={ws.pendingPreset}
+                onConfirm={ws.confirmPreset}
               />
             )}
 
