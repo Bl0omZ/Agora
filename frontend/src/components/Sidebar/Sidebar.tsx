@@ -62,7 +62,9 @@ export function Sidebar({
                   <span className={styles.sessionMeta}>
                     {session.messageCount} 条消息 · {formatRelativeTime(session.updatedAt)}
                     <button
+                      type="button"
                       className={styles.deleteButton}
+                      aria-label={`删除会话：${session.topic || '未命名讨论'}`}
                       onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id); }}
                     >
                       删除

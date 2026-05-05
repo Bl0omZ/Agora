@@ -3,7 +3,6 @@ import { ConnectionDot } from '../common/ConnectionDot';
 import styles from './TopBar.module.css';
 
 interface TopBarProps {
-  topic: string;
   connectionStatus: ConnectionStatus;
   isReady: boolean;
   onExportMarkdown: () => void;
@@ -15,14 +14,14 @@ interface TopBarProps {
 }
 
 export function TopBar({
-  topic, connectionStatus, isReady,
+  connectionStatus, isReady,
   onExportMarkdown, onExportPdf, onExportScreenshot,
   onToggleSettings, onSaveReport, savedPath,
 }: TopBarProps) {
   return (
     <header className={styles.topBar}>
       <div className={styles.left}>
-        <h1 className={styles.title}>{topic || 'Agent Discussion'}</h1>
+        <h1 className={styles.title}>Agent Discussion</h1>
         <ConnectionDot status={connectionStatus} />
       </div>
       <div className={styles.actions}>

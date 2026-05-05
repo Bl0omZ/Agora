@@ -91,6 +91,10 @@ class _SingleServiceKernel:
 
 
 def _default_config_path() -> str:
+    local_config = Path(__file__).resolve().parent / "config" / "agent.yaml"
+    if local_config.exists():
+        return str(local_config)
+
     import importlib.resources as pkg_resources
     ref = pkg_resources.files("src").joinpath("config/agents.yaml")
     with pkg_resources.as_file(ref) as path:
@@ -1550,6 +1554,16 @@ async def get_session(session_id: str):
         return JSONResponse({"error": "Session not found"}, status_code=404)
     data = json.loads(file_path.read_text(encoding='utf-8'))
     return data
+
+
+@app.delete('/api/sessions/{session_id}')
+async def delete_session(session_id: str):
+    """Delete a saved session JSON file (path-traversal hardened)."""
+    file_path = _safe_resolve(SESSIONS_DIR, f"{session_id}.json", expected_suffix='.json')
+    if file_path.exists() and file_path.is_file():
+        file_path.unlink()
+        return {"status": "ok", "deleted": True, "id": session_id}
+    return {"status": "ok", "deleted": False, "id": session_id}
 
 
 @app.get("/")

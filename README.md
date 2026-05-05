@@ -97,6 +97,8 @@ agent-discussion -t "测试" -v
 
 ### 配置文件示例（`src/config/agents.yaml`）
 
+本地需要写真实 key 时，复制 `src/config/agent.yaml.example` 为 `src/config/agent.yaml`。`agent.yaml` 已被 Git 忽略；Web 和 CLI 会优先读取它，未创建时使用仓库内的 `src/config/agents.yaml`。
+
 ```yaml
 manager_service_index: 0  # 用第几个 agent 的 service 作为主持人 LLM
 default_preset: architecture_review
@@ -251,6 +253,7 @@ supports_structured_output: false
 
 | 文件 | 用途 |
 |------|------|
+| `src/config/agent.yaml.example` | 本地私有配置模板，复制为被忽略的 `agent.yaml` 后填写真实 key |
 | `src/config/agents.yaml` | 默认完整配置（含 8 个 agent + 6 种 preset） |
 | `src/config/agents_optimized.yaml` | agents.yaml 的优化变体（A/B test，仅覆盖差异项） |
 | `src/config/discussion_only.yaml` | 仅讨论，不投票 |

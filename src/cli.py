@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from pathlib import Path
 
 import click
 
@@ -11,6 +12,10 @@ from .pipeline import run_pipeline
 
 def _default_config_path() -> str:
     """Find the default config file bundled with the package."""
+    local_config = Path(__file__).resolve().parent / "config" / "agent.yaml"
+    if local_config.exists():
+        return str(local_config)
+
     import importlib.resources as pkg_resources
     ref = pkg_resources.files("src").joinpath("config/agents.yaml")
     with pkg_resources.as_file(ref) as path:

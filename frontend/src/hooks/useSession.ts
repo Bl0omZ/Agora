@@ -27,7 +27,7 @@ interface UseSessionReturn {
   loadHistorySession: (id: string) => SessionData | null;
   loadHistorySessionAsync: (id: string) => Promise<SessionData | null>;
   startNewSession: () => void;
-  deleteSession: (id: string) => void;
+  deleteSession: (id: string) => Promise<void>;
   syncToServer: (sessionData: SessionData) => Promise<void>;
 }
 
@@ -148,13 +148,18 @@ export function useSession(): UseSessionReturn {
     setIsHistoryMode(false);
   }, []);
 
-  const deleteSession = useCallback((id: string) => {
+  const deleteSession = useCallback(async (id: string) => {
+    try {
+      await fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    } catch (error) {
+      console.warn('Failed to delete remote session:', error);
+    }
     SessionManager.deleteSession(id);
-    refreshIndex();
     if (currentSessionId === id) {
       setCurrentSessionId(null);
       setIsHistoryMode(false);
     }
+    await refreshIndex();
   }, [currentSessionId, refreshIndex]);
 
   const syncToServer = useCallback(async (sessionData: SessionData) => {

@@ -79,6 +79,9 @@
 }
 
 .sessionMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   color: var(--ink-muted);
 }
@@ -106,10 +109,10 @@
 
 .deleteButton {
   background: none;
-  border: none;
+  border: 1px solid transparent;
   font-size: 11px;
   color: var(--ink-muted);
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 3px;
   margin-left: auto;
   opacity: 0;
@@ -117,4 +120,5 @@
 }
 
 .sessionItem:hover .deleteButton { opacity: 1; }
+.deleteButton:focus-visible { opacity: 1; outline: none; border-color: var(--accent-soft); }
 .deleteButton:hover { color: #C45A5A; background: #FFF0F0; }
