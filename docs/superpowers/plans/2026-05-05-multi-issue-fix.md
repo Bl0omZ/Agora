@@ -666,8 +666,8 @@ git commit -m "fix: sanitize blueprint id to remove markdown auto-link leakage"
 先读取两个参考 skill 的内容，提取可用于 prompt 的约束规则：
 
 ```bash
-cat /Users/lvzhibo/.claude/skills/technical-writer/SKILL.md
-cat /Users/lvzhibo/.claude/skills/humanizer-zh/SKILL.md
+cat ~/.claude/skills/technical-writer/SKILL.md
+cat ~/.claude/skills/humanizer-zh/SKILL.md
 ```
 
 - [ ] **步骤 2：修改 reporting.py 的 save_report prompt**

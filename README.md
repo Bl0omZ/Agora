@@ -28,19 +28,14 @@
 ### 安装步骤
 
 ```bash
-cd /Users/lvzhibo/Agent/agora
+# 克隆仓库后进入项目目录
+cd agora
 
 # 安装后端依赖和开发测试依赖
 pip install -e ".[dev]"
 
 # 安装前端依赖
 cd frontend && npm install
-```
-
-如需继续使用本机 Semantic Kernel 源码调试，可额外执行：
-
-```bash
-pip install -e /Users/lvzhibo/Downloads/semantic-kernel-main/python
 ```
 
 > 安装完成后，`agora`（CLI）和 `agora-web`（Web 后端）两个命令会全局可用。
@@ -52,7 +47,6 @@ pip install -e /Users/lvzhibo/Downloads/semantic-kernel-main/python
 ### 方式 A：Web UI（推荐）
 
 ```bash
-cd /Users/lvzhibo/Agent/agora
 ./start.sh
 ```
 

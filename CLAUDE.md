@@ -21,8 +21,8 @@
 
 `agora` 是已从 Semantic Kernel 主仓库拆出的**独立项目**，用来让多个 LLM agent 围绕一个议题进行有主持人控场的群组讨论 → 投票 → 报告归档。提供 CLI 和 Web UI 两种交互。
 
-- **入口路径**：`/Users/lvzhibo/Agent/agora/`
-- **Semantic Kernel 依赖**：默认走 `pyproject.toml` 的 `semantic-kernel>=1.0.0`；本机调试可额外 `pip install -e /Users/lvzhibo/Downloads/semantic-kernel-main/python`
+- **入口路径**：项目根目录
+- **Semantic Kernel 依赖**：默认走 `pyproject.toml` 的 `semantic-kernel>=1.0.0`
 - **Python 包名**：`agora`，源码在 `src/`
 - **CLI**：`agora`（`src/cli.py:main`）
 - **Web 后端**：`agora-web`（`src/web_entry.py:main` → `src/web_server.py`）
@@ -227,7 +227,7 @@ agora -c src/config/discussion_only.yaml -t "议题" -v
 - `KNOWN_ISSUES.md` 中标记 `status: 🚧 进行中` 或 `📋 待办` 的条目
 
 2026-04-25 已完成：
-1. 项目迁移到 `/Users/lvzhibo/Agent/agora`
+1. 项目迁移为独立仓库
 2. 清理 `.omx` / `.omc` / `.claude` / 缓存 / 构建产物，保留 `docs/`、`report/`、`sessions/`
 3. 默认配置改为环境变量读取 key，避免把本地密钥纳入 Git
 4. 后端入口改为可安装模块 `src.web_entry:main`
@@ -242,7 +242,7 @@ agora -c src/config/discussion_only.yaml -t "议题" -v
 
 JetBrains IDE 索引未识别 `pip install -e` 安装的包。**代码本身合法**，运行时没问题。
 
-**消除方法**：在项目根目录执行 `pip install -e ".[dev]"`。如需调试本机 SK 源码，再执行 `pip install -e /Users/lvzhibo/Downloads/semantic-kernel-main/python`。
+**消除方法**：在项目根目录执行 `pip install -e ".[dev]"`。
 
 ---
 
