@@ -888,13 +888,13 @@ const confirmPreset = useCallback((presetName: string) => {
 
 阶段 1-4 完成后，核心池 8 个角色 + 5 个 preset 已可用。阶段 5 利用三个已下载的仓库，把现成的 agent 定义直接适配为池中角色。
 
-### 5.1 仓库本地路径
+### 5.1 参考仓库
 
-| 仓库 | 本地路径 |
-|------|---------|
-| agent-skills (Addy Osmani) | `/Users/lvzhibo/Agent/agent-skills/` |
-| mattpocock/skills | `/Users/lvzhibo/Agent/skills/` |
-| awesome-codex-skills | `/Users/lvzhibo/Agent/awesome-codex-skills/` |
+| 仓库 | 来源 |
+|------|------|
+| agent-skills (Addy Osmani) | github.com/addyosmani/agent-skills |
+| mattpocock/skills | github.com/mattpocock/skills |
+| awesome-codex-skills | github.com/anthropics/awesome-codex-skills |
 
 ### 5.2 SecurityReviewer — 从 `agent-skills/agents/security-auditor.md` 适配
 

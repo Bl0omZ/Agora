@@ -27,7 +27,7 @@
 
 JetBrains IDE 索引未识别 `pip install -e` 安装的包。**代码本身合法**，运行时没问题。
 
-**消除方法**：在项目根目录执行 `pip install -e ".[dev]"`。如需调试本机 SK 源码，再执行 `pip install -e /Users/lvzhibo/Downloads/semantic-kernel-main/python`。
+**消除方法**：在项目根目录执行 `pip install -e ".[dev]"`。
 
 ---
 
