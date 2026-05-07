@@ -1,4 +1,4 @@
-"""FastAPI WebSocket server for agent-discussion frontend."""
+"""FastAPI WebSocket server for Agora frontend."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ from .voting import run_voting
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Agent Discussion")
+app = FastAPI(title="Agora")
 
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
 

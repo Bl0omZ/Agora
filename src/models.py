@@ -1,4 +1,4 @@
-"""Pydantic data models for agent-discussion CLI tool."""
+"""Pydantic data models for Agora CLI tool."""
 
 from enum import Enum
 

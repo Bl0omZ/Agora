@@ -1,4 +1,4 @@
-"""CLI entry point for agent-discussion tool."""
+"""CLI entry point for Agora tool."""
 
 import asyncio
 import logging
@@ -49,10 +49,10 @@ def main(config: str | None, topic: str, verbose: bool) -> None:
     Examples:
 
         # Full pipeline (uses bundled default config)
-        agent-discussion -t "Should we build feature X?"
+        agora -t "Should we build feature X?"
 
         # Custom config
-        agent-discussion -c my_agents.yaml -t "Evaluate architecture Y"
+        agora -c my_agents.yaml -t "Evaluate architecture Y"
     """
     if verbose:
         logging.basicConfig(level=logging.DEBUG)

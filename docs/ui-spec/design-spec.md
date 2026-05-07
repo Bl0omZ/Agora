@@ -1,9 +1,9 @@
-# Agent Discussion — Visible Moderator Dispatch · UI Spec (React 草案版)
+# Agora — Visible Moderator Dispatch · UI Spec (React 草案版)
 
 > 设计契约 · 与现有 React 架构对齐 · 2026-04-24
 >
 > **路线说明**：本 spec 最初按 huashu-design「独立 HTML 高保真原型」路线起草，
-> 但因为 `agent-discussion/frontend` 已经是一个完整的 React 19 + TS + CSS Modules 工程，
+> 但因为 `agora/frontend` 已经是一个完整的 React 19 + TS + CSS Modules 工程，
 > 中间产物 HTML mockup 无法直接照着实现，反而增加沟通成本。
 > 现在路线已切到「React 组件草案 + 共享 token + dev 预览页」，所有产物都在
 > `frontend/src/components/Brainstorm/` 与 `frontend/src/components/Timeline/HostMessage*` 下。
@@ -20,7 +20,7 @@
 >
 > **dev 预览**：
 > ```
-> cd agent-discussion/frontend
+> cd agora/frontend
 > npm run dev
 > # 浏览器打开 http://localhost:5173/?preview=brainstorm
 > ```
@@ -29,7 +29,7 @@
 
 ## 0. 设计哲学锚点（反 AI slop self-check）
 
-本设计遵循三条与现有 `agent-discussion` 前端一致的视觉语法：
+本设计遵循三条与现有 `agora` 前端一致的视觉语法：
 
 | 锚点 | 体现 | 反对什么 |
 |---|---|---|
@@ -254,7 +254,7 @@ const refineAgain              = () => ws.send(JSON.stringify({type: 'topic_refi
 ### dev 验证
 
 ```bash
-cd agent-discussion/frontend && npm run dev
+cd agora/frontend && npm run dev
 # 打开 http://localhost:5173/?preview=brainstorm
 # 点 chip / 输入文字 / 切换状态 / 点跳过看 modal / 点失败 chip 看 notice 切换
 ```

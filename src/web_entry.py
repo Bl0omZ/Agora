@@ -1,4 +1,4 @@
-"""Launch the Agent Discussion web server."""
+"""Launch the Agora web server."""
 
 import copy
 import logging
@@ -10,7 +10,7 @@ from uvicorn.config import LOGGING_CONFIG
 
 
 def _log_level_name() -> str:
-    level = os.getenv("AGENT_DISCUSSION_LOG_LEVEL", "INFO").upper()
+    level = os.getenv("AGORA_LOG_LEVEL", "INFO").upper()
     return level if level in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"} else "INFO"
 
 
@@ -38,7 +38,7 @@ def main() -> None:
         force=True,
     )
     logging.getLogger("src").setLevel(level)
-    logging.getLogger(__name__).info("agent-discussion web starting log_level=%s", level)
+    logging.getLogger(__name__).info("agora web starting log_level=%s", level)
 
     uvicorn.run(
         "src.web_server:app",

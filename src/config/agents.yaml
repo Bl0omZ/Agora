@@ -1,5 +1,5 @@
 # Technical Review & Decision Discussion Group
-# Usage: agent-discussion -c config/agents.yaml -t "your topic"
+# Usage: agora -c config/agents.yaml -t "your topic"
 
 discussion:
   enabled: true
