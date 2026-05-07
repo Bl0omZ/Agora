@@ -131,21 +131,21 @@ Expected:
 Backend:
 
 ```bash
-cd /Users/lvzhibo/Agent/agent-discussion
+cd /Users/lvzhibo/Agent/agora
 pytest tests/test_pipeline_and_voting.py
 ```
 
 Frontend:
 
 ```bash
-cd /Users/lvzhibo/Agent/agent-discussion/frontend
+cd /Users/lvzhibo/Agent/agora/frontend
 npm run build
 ```
 
 E2E:
 
 ```bash
-cd /Users/lvzhibo/Agent/agent-discussion
+cd /Users/lvzhibo/Agent/agora
 python scripts/e2e_discussion_ws.py --topic "作为安全工程师需要发送漏洞工单给研发，需要在安全工单中输出哪些内容可以保证清晰易懂"
 ```
 

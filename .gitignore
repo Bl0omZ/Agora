@@ -14,12 +14,16 @@ src/config/agent.yaml
 src/config/*.local.yaml
 src/config/*.private.yaml
 
+# Local agent/editor runtime state and planning artifacts.
 .omx/
 .omc/
 .claude/
+.codex/
+.idea/
 
 frontend/node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
 
+sessions/
 *.log

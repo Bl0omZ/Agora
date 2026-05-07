@@ -36,7 +36,7 @@ export function Welcome({ onStart }: WelcomeProps) {
   return (
     <div className={styles.welcome}>
       <div className={styles.content}>
-        <h1 className={styles.title}>Agent Discussion</h1>
+        <h1 className={styles.title}>Agora</h1>
         <p className={styles.subtitle}>多智能体协作讨论平台</p>
         <p className={styles.description}>
           输入一个话题，多个 AI Agent 将从不同视角展开讨论、辩论和总结。

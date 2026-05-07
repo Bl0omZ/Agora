@@ -1,4 +1,4 @@
-# Agent Discussion
+# Agora
 
 > 基于 Microsoft Semantic Kernel 的多 Agent 群组讨论、投票与报告生成工具，提供 **CLI** 与 **Web UI** 两种交互方式。
 
@@ -28,7 +28,7 @@
 ### 安装步骤
 
 ```bash
-cd /Users/lvzhibo/Agent/agent-discussion
+cd /Users/lvzhibo/Agent/agora
 
 # 安装后端依赖和开发测试依赖
 pip install -e ".[dev]"
@@ -43,7 +43,7 @@ cd frontend && npm install
 pip install -e /Users/lvzhibo/Downloads/semantic-kernel-main/python
 ```
 
-> 安装完成后，`agent-discussion`（CLI）和 `agent-discussion-web`（Web 后端）两个命令会全局可用。
+> 安装完成后，`agora`（CLI）和 `agora-web`（Web 后端）两个命令会全局可用。
 
 默认配置使用环境变量读取 key。可复制 `.env.example` 为 `.env`，填入兼容模型服务的 key；本地 SSE 代理 key 可留空。
 
@@ -52,7 +52,7 @@ pip install -e /Users/lvzhibo/Downloads/semantic-kernel-main/python
 ### 方式 A：Web UI（推荐）
 
 ```bash
-cd /Users/lvzhibo/Agent/agent-discussion
+cd /Users/lvzhibo/Agent/agora
 ./start.sh
 ```
 
@@ -66,13 +66,13 @@ cd /Users/lvzhibo/Agent/agent-discussion
 
 ```bash
 # 使用内置默认配置
-agent-discussion -t "我们应该用 GraphQL 还是 REST？"
+agora -t "我们应该用 GraphQL 还是 REST？"
 
 # 指定自定义配置
-agent-discussion -c /path/to/my_agents.yaml -t "评估架构 Y"
+agora -c /path/to/my_agents.yaml -t "评估架构 Y"
 
 # 详细日志
-agent-discussion -t "测试" -v
+agora -t "测试" -v
 ```
 
 ## Usage

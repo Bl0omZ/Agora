@@ -127,7 +127,7 @@ async def run_e2e(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run a real agent-discussion WebSocket E2E scenario.")
+    parser = argparse.ArgumentParser(description="Run a real Agora WebSocket E2E scenario.")
     parser.add_argument("--url", default="ws://localhost:8001/ws")
     parser.add_argument("--topic", default=DEFAULT_TOPIC)
     parser.add_argument("--freeform", default=DEFAULT_FREEFORM)

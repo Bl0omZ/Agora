@@ -1,4 +1,4 @@
-"""Markdown report generation for agent-discussion."""
+"""Markdown report generation for Agora."""
 
 from __future__ import annotations
 

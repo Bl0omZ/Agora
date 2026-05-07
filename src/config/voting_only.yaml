@@ -1,5 +1,5 @@
 # Voting only mode (no discussion)
-# Usage: agent-discussion -c config/voting_only.yaml -t "your topic"
+# Usage: agora -c config/voting_only.yaml -t "your topic"
 
 discussion:
   enabled: false

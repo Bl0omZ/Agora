@@ -21,7 +21,7 @@ export function TopBar({
   return (
     <header className={styles.topBar}>
       <div className={styles.left}>
-        <h1 className={styles.title}>Agent Discussion</h1>
+        <h1 className={styles.title}>Agora</h1>
         <ConnectionDot status={connectionStatus} />
       </div>
       <div className={styles.actions}>

@@ -24,7 +24,7 @@ export function Sidebar({
   return (
     <aside className={styles.sidebar}>
       <div className={styles.header}>
-        <div className={styles.logo}>Agent Discussion</div>
+        <div className={styles.logo}>Agora</div>
         <div className={styles.subtitle}>多智能体协作讨论平台</div>
       </div>
 

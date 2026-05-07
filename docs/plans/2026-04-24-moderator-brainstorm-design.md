@@ -8,7 +8,7 @@
 
 ## 0. 背景与目标
 
-为 `agent-discussion` 增加两个能力：
+为 `agora` 增加两个能力：
 
 1. **UI 增强**：Agent 状态卡片显示所属模型；主持人作为特殊角色卡片混入面板
 2. **流程增强**：在原讨论开始前新增「主持人 brainstorm 议题精炼」阶段，主持人通过多轮 Q&A 与用户对齐需求
@@ -128,7 +128,7 @@ class AppConfig(BaseModel):
 ### 后端
 
 ```
-agent-discussion/src/
+agora/src/
 ├── models.py        ← 新增 BrainstormConfig
 ├── brainstorm.py    ← 新文件：BrainstormSession 引擎
 ├── discussion.py    ← 修改：在 run_discussion 前调用 brainstorm
@@ -138,7 +138,7 @@ agent-discussion/src/
 ### 前端
 
 ```
-agent-discussion/frontend/src/
+agora/frontend/src/
 ├── types.ts                                 ← 新增类型 + AgentInfo 加 model/is_moderator
 ├── hooks/useWebSocket.ts                    ← 新增事件处理
 ├── components/

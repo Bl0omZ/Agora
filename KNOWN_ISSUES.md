@@ -1,4 +1,4 @@
-# KNOWN_ISSUES — Agent Discussion 问题记录
+# KNOWN_ISSUES — Agora 问题记录
 
 > 本文档记录已知问题和本轮修复记录。每个问题都附带：现象、根因（如已知）、影响、建议下一步或修复记录。
 > 修复一项就把它从这里删除（同时更新 `CLAUDE.md` 的「修复记录」章节）。

@@ -1,4 +1,4 @@
-# CLAUDE.md — Agent Discussion 项目记忆
+# CLAUDE.md — Agora 项目记忆
 
 > 本文档专为 AI 助手（Claude / Copilot / Codex）在新会话中**快速恢复上下文**而写。
 > 人类维护者请在做出**架构性变更**或**关键决策**后更新本文档。
@@ -19,13 +19,13 @@
 
 ## 1. 30 秒理解项目
 
-`agent-discussion` 是已从 Semantic Kernel 主仓库拆出的**独立项目**，用来让多个 LLM agent 围绕一个议题进行有主持人控场的群组讨论 → 投票 → 报告归档。提供 CLI 和 Web UI 两种交互。
+`agora` 是已从 Semantic Kernel 主仓库拆出的**独立项目**，用来让多个 LLM agent 围绕一个议题进行有主持人控场的群组讨论 → 投票 → 报告归档。提供 CLI 和 Web UI 两种交互。
 
-- **入口路径**：`/Users/lvzhibo/Agent/agent-discussion/`
+- **入口路径**：`/Users/lvzhibo/Agent/agora/`
 - **Semantic Kernel 依赖**：默认走 `pyproject.toml` 的 `semantic-kernel>=1.0.0`；本机调试可额外 `pip install -e /Users/lvzhibo/Downloads/semantic-kernel-main/python`
-- **Python 包名**：`agent-discussion`，源码在 `src/`
-- **CLI**：`agent-discussion`（`src/cli.py:main`）
-- **Web 后端**：`agent-discussion-web`（`src/web_entry.py:main` → `src/web_server.py`）
+- **Python 包名**：`agora`，源码在 `src/`
+- **CLI**：`agora`（`src/cli.py:main`）
+- **Web 后端**：`agora-web`（`src/web_entry.py:main` → `src/web_server.py`）
 - **前端**：`frontend/`（Vite + React + TypeScript）
 
 ---
@@ -189,11 +189,11 @@ result = await manager.filter_results(history)  # 总结
 ./start.sh
 
 # 单独启后端
-agent-discussion-web
+agora-web
 
 # CLI 模式
-agent-discussion -t "你的议题"
-agent-discussion -c src/config/discussion_only.yaml -t "议题" -v
+agora -t "你的议题"
+agora -c src/config/discussion_only.yaml -t "议题" -v
 ```
 
 ### 代码风格
@@ -206,7 +206,7 @@ agent-discussion -c src/config/discussion_only.yaml -t "议题" -v
 
 - ❌ 不要重写 `GroupChatOrchestration` —— 直接用并通过 `LLMGroupChatManager` 注入策略
 - ❌ 不要在 `discussion.py` 里直接调 `service.client.chat.completions.create` —— 用 SK 提供的 `service.get_chat_message_content`
-- ❌ 不要为当前项目修改外部 `semantic-kernel-main/python/semantic_kernel/` 代码 —— 所有适配应在 `agent-discussion/src/` 内完成
+- ❌ 不要为当前项目修改外部 `semantic-kernel-main/python/semantic_kernel/` 代码 —— 所有适配应在 `agora/src/` 内完成
 - ❌ 不要为 brainstorm 阶段设计模板库 —— 设计文档明确 YAGNI 否决
 - ❌ 不要给 brainstorm 加多个主持人之间的反思循环 —— 同上
 
@@ -227,7 +227,7 @@ agent-discussion -c src/config/discussion_only.yaml -t "议题" -v
 - `KNOWN_ISSUES.md` 中标记 `status: 🚧 进行中` 或 `📋 待办` 的条目
 
 2026-04-25 已完成：
-1. 项目迁移到 `/Users/lvzhibo/Agent/agent-discussion`
+1. 项目迁移到 `/Users/lvzhibo/Agent/agora`
 2. 清理 `.omx` / `.omc` / `.claude` / 缓存 / 构建产物，保留 `docs/`、`report/`、`sessions/`
 3. 默认配置改为环境变量读取 key，避免把本地密钥纳入 Git
 4. 后端入口改为可安装模块 `src.web_entry:main`

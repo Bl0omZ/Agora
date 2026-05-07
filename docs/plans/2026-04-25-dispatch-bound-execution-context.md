@@ -1,7 +1,7 @@
 # Context Snapshot: Dispatch-Bound Execution
 
 Task statement:
-- Choose the recommended design: dispatch-bound execution for agent-discussion.
+- Choose the recommended design: dispatch-bound execution for agora.
 
 Desired outcome:
 - Keep the Host responsible for task complexity analysis and dispatch planning.
@@ -9,7 +9,7 @@ Desired outcome:
 - Produce a final solution that is clearly separate from voting/review output.
 
 Known facts and evidence:
-- Session `/Users/lvzhibo/Agent/agent-discussion/sessions/modps4lm.json` shows the current mismatch.
+- Session `/Users/lvzhibo/Agent/agora/sessions/modps4lm.json` shows the current mismatch.
 - Host generated a medium-complexity dispatch plan with invented roles such as `SecurityProcessAgent`, `BackendCommunicationAgent`, `RiskTriageAgent`, `ReproductionEvidenceAgent`, and `RemediationValidationAgent`.
 - Actual discussion still ran the configured fixed agents: `Architect`, `Pragmatist`, and `Challenger`.
 - The discussion pipeline forces at least one turn per configured discussion agent through `min_rounds_floor = max(1, len(agents))`.

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Agent Discussion — 一键启动脚本
+# Agora — 一键启动脚本
 # 同时启动后端 (FastAPI, port 8001) 和前端 (Vite dev, port 5173)
 
 set -euo pipefail
@@ -58,12 +58,12 @@ PY
 }
 
 select_backend_python() {
-  if [ -n "${AGENT_DISCUSSION_PYTHON:-}" ]; then
-    if python_has_backend_deps "$AGENT_DISCUSSION_PYTHON"; then
-      BACKEND_PYTHON="$AGENT_DISCUSSION_PYTHON"
+  if [ -n "${AGORA_PYTHON:-}" ]; then
+    if python_has_backend_deps "$AGORA_PYTHON"; then
+      BACKEND_PYTHON="$AGORA_PYTHON"
       return
     fi
-    fail "指定的 AGENT_DISCUSSION_PYTHON 缺少后端依赖，请确认已安装 fastapi / semantic-kernel / uvicorn。"
+    fail "指定的 AGORA_PYTHON 缺少后端依赖，请确认已安装 fastapi / semantic-kernel / uvicorn。"
   fi
 
   for candidate in \
@@ -77,7 +77,7 @@ select_backend_python() {
     fi
   done
 
-  fail "未找到可运行后端的 Python。请先安装依赖，或用 AGENT_DISCUSSION_PYTHON=/path/to/python ./start.sh 指定解释器。"
+  fail "未找到可运行后端的 Python。请先安装依赖，或用 AGORA_PYTHON=/path/to/python ./start.sh 指定解释器。"
 }
 
 # --- 检查前端依赖 ---
@@ -91,9 +91,9 @@ fi
 echo -e "${CYAN}启动后端 (http://localhost:8001)…${NC}"
 cd "$ROOT_DIR"
 export PYTHONUNBUFFERED=1
-export AGENT_DISCUSSION_LOG_LEVEL="${AGENT_DISCUSSION_LOG_LEVEL:-INFO}"
+export AGORA_LOG_LEVEL="${AGORA_LOG_LEVEL:-INFO}"
 select_backend_python
-echo -e "  后端日志级别: ${AGENT_DISCUSSION_LOG_LEVEL}"
+echo -e "  后端日志级别: ${AGORA_LOG_LEVEL}"
 echo -e "  Python: $("${BACKEND_PYTHON}" -c 'import sys; print(sys.executable)')"
 "$BACKEND_PYTHON" -u "$BACKEND_SCRIPT" &
 BACKEND_PID=$!
@@ -145,7 +145,7 @@ echo -e " ${GREEN}✓${NC}"
 
 echo ""
 echo -e "${GREEN}======================================${NC}"
-echo -e "${GREEN}  Agent Discussion 已启动！${NC}"
+echo -e "${GREEN}  Agora 已启动！${NC}"
 echo -e "${GREEN}======================================${NC}"
 echo -e "  前端:  ${CYAN}http://localhost:5173${NC}"
 echo -e "  后端:  ${CYAN}http://localhost:8001${NC}"

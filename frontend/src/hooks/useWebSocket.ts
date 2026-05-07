@@ -9,7 +9,7 @@ import type {
 
 export type ConnectionStatus = 'disconnected' | 'connected' | 'error';
 
-const CLIENT_SESSION_STORAGE_KEY = 'agent-discussion-client-session-id';
+const CLIENT_SESSION_STORAGE_KEY = 'agora-client-session-id';
 
 function createClientSessionId(): string {
   const cryptoApi = window.crypto;
