@@ -14,7 +14,6 @@
 - **独立投票**：专家 agent 并行表态（赞成 / 反对 / 中立 + 置信度 + 理由），本地聚合
 - **追问 (Follow-up)**：投票后用户可基于完整对话上下文追加问题
 - **报告归档**：经用户确认后保存为结构化 markdown 报告，沉淀讨论资产
-- **SSE 代理适配**：内置 `openai_sse_proxy`，可对接只支持 SSE 流式的本地代理（如 `http://localhost:3030/v1`）
 - **Web UI**：实时 timeline 展示发言、流式打字、投票卡、报告管理
 
 ## Installation
@@ -144,65 +143,6 @@ brainstorm:
 
 环境变量插值用 `${VAR_NAME}` 语法，自动从 `os.environ` 读取；可用 `${VAR_NAME:-}` 表示缺失时使用空值。
 
-## Architecture
-
-```
-┌──────────────────────┐
-│   Web UI (React)     │  port 5173
-│   - Timeline         │
-│   - VotingCard       │
-│   - AgentStatusPanel │
-└──────────┬───────────┘
-           │ WebSocket /ws/{session_id}
-           ▼
-┌──────────────────────┐
-│  FastAPI (web_server)│  port 8001
-│  - SessionManager    │
-│  - 事件推送          │
-└──────────┬───────────┘
-           │
-           ▼
-┌──────────────────────────────────────────┐
-│  Pipeline                                │
-│  brainstorm → discussion → voting → ... │
-└──────────┬───────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────────────┐
-│  Semantic Kernel                         │
-│  GroupChatOrchestration                  │
-│  + LLMGroupChatManager (自定义)          │
-│    - select_next_agent (LLM)             │
-│    - should_terminate (LLM + min_rounds) │
-│    - filter_results (LLM 总结)           │
-└──────────┬───────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────────────┐
-│  Service Adapter                         │
-│  - OpenAIChatCompletion (官方/兼容)      │
-│  - SSEProxyAsyncOpenAI (本地 SSE 代理)   │
-└──────────────────────────────────────────┘
-```
-
-### 关键模块
-
-| 文件 | 职责 |
-|------|------|
-| `src/cli.py` | CLI 入口，串联 `loader → pipeline` |
-| `src/web_server.py` | FastAPI + WebSocket，会话生命周期、事件推送、报告/会话 API |
-| `src/pipeline.py` | CLI 端的 discussion → voting → confirm → save 串联 |
-| `src/discussion.py` | `LLMGroupChatManager`：LLM 驱动的选人/终止/总结，含 `min_rounds` 守卫 |
-| `src/brainstorm.py` | `BrainstormSession`：主持人多轮 Q&A 精炼议题（含降级策略） |
-| `src/voting.py` | 并行投票 + 本地聚合（赞成/反对/中立 + 置信度） |
-| `src/loader.py` | YAML 配置加载、agent 实例化、kernel 注册 |
-| `src/blueprint.py` | 讨论结束后生成 Agent 系统蓝图（角色/工作流/评估），含 fallback 机制 |
-| `src/blueprint_export.py` | Blueprint 导出为 JSON / YAML / Markdown / Prompt Pack |
-| `src/openai_sse_proxy.py` | 适配 SSE-only 本地代理，支持 SK 的 streaming 路径 |
-| `src/reporting.py` | 把对话和投票渲染成结构化 markdown 报告 |
-| `src/models.py` | Pydantic 配置模型（含 PresetConfig / BrainstormConfig） |
-| `src/web_entry.py` | 可安装的 Web 后端入口 |
-
 ## Configuration
 
 ### Pipeline 开关
@@ -219,16 +159,6 @@ brainstorm:
   enabled: true       # 关闭则直接进入 discussion
   max_rounds: 10      # 主持人最多追问轮数
 ```
-
-### 结构化输出回退
-
-部分 LLM 端点不支持 `response_format=json_schema`，可在配置顶层设置：
-
-```yaml
-supports_structured_output: false
-```
-
-`LLMGroupChatManager` 会回退到 prompt + regex 解析模式。
 
 ### Agent 预设 (Presets)
 
@@ -252,43 +182,6 @@ supports_structured_output: false
 | `src/config/agents_optimized.yaml` | agents.yaml 的优化变体（A/B test，仅覆盖差异项） |
 | `src/config/discussion_only.yaml` | 仅讨论，不投票 |
 | `src/config/voting_only.yaml` | 仅投票，不讨论 |
-
-## Troubleshooting
-
-### Error: `openai_sse_proxy currently supports non-streaming callers only`
-
-**原因**：旧版 `openai_sse_proxy.py` 未实现 streaming 路径，而 SK 的 `GroupChatOrchestration` 强制 `stream=True`。
-
-**解决**：当前版本已修复（`SSEProxyAsyncOpenAI` 通过 `_PseudoAsyncStream` 注册为 `openai.AsyncStream` 的虚拟子类）。如果仍报错，确认 `src/openai_sse_proxy.py` 中存在 `_OpenAIAsyncStream.register(_PseudoAsyncStream)` 调用。
-
-### 讨论没人发言就出结论
-
-**原因**：LLM 在 round 1 判定"应该结束"，导致 agents 一句话都没说就进入总结。
-
-**解决**：当前版本已加 `min_rounds` 守卫，默认 `min_rounds = max(1, len(agents))`，强制每个 agent 至少有发言机会。位置：`src/discussion.py` 的 `LLMGroupChatManager.should_terminate()`。
-
-### 用户消息显示为 "Unknown"
-
-**原因**：旧版 `web_server.py` 把所有无 name 的消息一律 fallback 成 "Unknown"。
-
-**解决**：当前版本按 role 区分——`role=user` → "用户"，`role=assistant` → "匿名"。位置：`src/web_server.py::push_message`。
-
-### 前端 5173 端口被占用
-
-```bash
-lsof -i :5173 | cat
-# 或：cd frontend && npx vite --port 5174 --host
-```
-
-## Development
-
-更多上下文见根目录的 `CLAUDE.md`（项目记忆）和 `KNOWN_ISSUES.md`（遗留问题清单）。
-
-### 添加新 agent 或 preset
-
-在 `src/config/agents.yaml` 的 `agents` 列表追加一个条目即可，无需改代码。`description` 字段是必填的——`GroupChatOrchestration` 会用它生成给主持人 LLM 的"参与者介绍"。
-
-新增 agent 或 preset 时，需同步到 `src/config/agents_optimized.yaml`。该文件是 agents.yaml 的优化变体，agents.yaml 为权威配置。
 
 ## License
 

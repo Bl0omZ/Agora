@@ -28,4 +28,8 @@ frontend/tsconfig.tsbuildinfo
 sessions/
 sessions_backup/
 docs/
+report/
+CLAUDE.md
+AGENTS.md
+KNOWN_ISSUES.md
 *.log
