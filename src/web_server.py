@@ -12,8 +12,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import Body, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -22,14 +22,34 @@ from semantic_kernel.contents import AuthorRole, ChatHistory, ChatMessageContent
 from .blueprint import AgentSystemBlueprint, generate_blueprint
 from .blueprint_export import ExportFormat, export_blueprint
 from .brainstorm import BrainstormSession, SkipBrainstormException
+from .config_writer import (
+    ConfigWriteError,
+    assert_etag_matches,
+    compute_etag,
+    read_raw_config,
+    read_yaml_bytes,
+    to_public_config,
+    update_agents,
+    update_models,
+    update_presets,
+    update_runtime,
+    write_raw_config_atomic,
+)
 from .discussion import (
     _strip_hidden_reasoning,
     build_discussion_transcript,
     run_discussion,
     run_followup,
 )
-from .loader import create_agent, create_agent_with_scope, create_service, load_config, resolve_preset
-from .models import AppConfig
+from .loader import (
+    create_agent,
+    create_agent_with_scope,
+    create_service,
+    load_config,
+    resolve_agent_runtime_config,
+    resolve_preset,
+)
+from .models import AppConfig, DiscussionSummary
 from .reporting import save_report
 from .voting import run_voting
 
@@ -101,6 +121,143 @@ def _default_config_path() -> str:
         return str(path)
 
 
+def _config_path() -> Path:
+    return Path(_default_config_path())
+
+
+def _public_config_response(config_path: Path) -> JSONResponse:
+    config = load_config(str(config_path))
+    etag = compute_etag(read_yaml_bytes(config_path))
+    payload = to_public_config(config).model_dump(exclude={"api_key", "secret", "token"})
+    return JSONResponse(content=_to_jsonable(payload), headers={"ETag": etag})
+
+
+def _config_error_response(error: ConfigWriteError) -> JSONResponse:
+    payload: dict[str, Any] = {"error": {"detail": error.detail}}
+    if error.field:
+        payload["error"]["field"] = error.field
+    return JSONResponse(status_code=error.status_code, content=payload)
+
+
+def _write_config_section(
+    *,
+    body: Any,
+    if_match: str | None,
+    updater,
+) -> JSONResponse:
+    path = _config_path()
+    try:
+        assert_etag_matches(path, if_match)
+        raw = read_raw_config(path)
+        update_result = updater(raw, body)
+        sanitized_fields: list[dict[str, Any]] = []
+        if isinstance(update_result, tuple):
+            updated_raw, sanitized_fields = update_result
+        else:
+            updated_raw = update_result
+        etag = write_raw_config_atomic(path, updated_raw)
+    except ConfigWriteError as error:
+        return _config_error_response(error)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("config write failed")
+        return _config_error_response(ConfigWriteError(str(exc), status_code=422))
+
+    config = load_config(str(path))
+    public_payload = to_public_config(config).model_dump(exclude={"api_key", "secret", "token"})
+    payload = {
+        "status": "ok",
+        "etag": etag,
+        "sanitized_fields": sanitized_fields,
+        "config": public_payload,
+    }
+    return JSONResponse(content=_to_jsonable(payload), headers={"ETag": etag})
+
+
+@app.get("/api/config")
+async def get_config():
+    """Return the sanitized editable config view."""
+    return _public_config_response(_config_path())
+
+
+@app.get("/api/config/models")
+async def get_config_models():
+    """Return sanitized model registry entries."""
+    response = _public_config_response(_config_path())
+    return JSONResponse(
+        content={"models": response.body and json.loads(response.body)["models"]},
+        headers={"ETag": response.headers["etag"]},
+    )
+
+
+@app.put("/api/config/models")
+async def put_config_models(body: Any = Body(...), if_match: str | None = Header(default=None, alias="If-Match")):
+    return _write_config_section(body=body, if_match=if_match, updater=update_models)
+
+
+@app.get("/api/config/agents")
+async def get_config_agents():
+    """Return sanitized agent drafts."""
+    response = _public_config_response(_config_path())
+    return JSONResponse(
+        content={"agents": response.body and json.loads(response.body)["agents"]},
+        headers={"ETag": response.headers["etag"]},
+    )
+
+
+@app.put("/api/config/agents")
+async def put_config_agents(body: Any = Body(...), if_match: str | None = Header(default=None, alias="If-Match")):
+    return _write_config_section(body=body, if_match=if_match, updater=update_agents)
+
+
+@app.get("/api/config/presets")
+async def get_config_presets():
+    """Return sanitized preset drafts."""
+    response = _public_config_response(_config_path())
+    return JSONResponse(
+        content={"presets": response.body and json.loads(response.body)["presets"]},
+        headers={"ETag": response.headers["etag"]},
+    )
+
+
+@app.put("/api/config/presets")
+async def put_config_presets(body: Any = Body(...), if_match: str | None = Header(default=None, alias="If-Match")):
+    return _write_config_section(body=body, if_match=if_match, updater=update_presets)
+
+
+@app.get("/api/config/runtime")
+async def get_config_runtime():
+    """Return sanitized runtime settings."""
+    response = _public_config_response(_config_path())
+    return JSONResponse(
+        content={"runtime": response.body and json.loads(response.body)["runtime"]},
+        headers={"ETag": response.headers["etag"]},
+    )
+
+
+@app.put("/api/config/runtime")
+async def put_config_runtime(body: Any = Body(...), if_match: str | None = Header(default=None, alias="If-Match")):
+    return _write_config_section(body=body, if_match=if_match, updater=update_runtime)
+
+
+@app.get("/api/config/export")
+async def export_config():
+    """Download sanitized YAML config."""
+    config = load_config(str(_config_path()))
+    etag = compute_etag(read_yaml_bytes(_config_path()))
+    public_payload = to_public_config(config).model_dump(exclude={"api_key", "secret", "token"})
+    import yaml
+
+    yaml_text = yaml.safe_dump(public_payload, allow_unicode=True, sort_keys=False, indent=2)
+    return Response(
+        content=yaml_text,
+        media_type="application/x-yaml",
+        headers={
+            "ETag": etag,
+            "Content-Disposition": 'attachment; filename="agents.sanitized.yaml"',
+        },
+    )
+
+
 class SessionState:
     """Holds per-session pipeline state."""
 
@@ -112,13 +269,14 @@ class SessionState:
         self.voting_result = None
         self.dispatch_state: dict[str, Any] | None = None
         self.final_solution: str | None = None
+        self.discussion_summary: DiscussionSummary | None = None
         self.review_result = None
         self.blueprint = None
         self.blueprint_generation_status: str = "idle"
         self.blueprint_warnings: list[str] = []
         self.session_id: str | None = None
 
-        manager_cfg = config.agents[config.manager_service_index]
+        manager_cfg = resolve_agent_runtime_config(config, config.agents[config.manager_service_index])
         self.manager_service = create_service(manager_cfg)
         self.manager_config = manager_cfg
 
@@ -128,11 +286,12 @@ class SessionState:
         for index, agent_cfg in enumerate(config.agents):
             if index == config.manager_service_index:
                 continue
+            runtime_agent_cfg = resolve_agent_runtime_config(config, agent_cfg)
             if agent_cfg.final_only:
-                agent = create_agent(agent_cfg)
+                agent = create_agent(runtime_agent_cfg)
                 self.final_agents.append((agent_cfg, agent))
             else:
-                agent = create_agent_with_scope(agent_cfg)
+                agent = create_agent_with_scope(runtime_agent_cfg)
                 self.discussion_agents.append(agent)
                 self.discussion_agent_map[agent_cfg.name] = agent
 
@@ -587,11 +746,52 @@ def _build_discussion_topic(topic: str, dispatch_state: dict[str, Any] | None) -
     return "\n".join(lines)
 
 
+def _agent_model_display(config: AppConfig, agent_name: str) -> str:
+    agent = next((item for item in config.agents if item.name == agent_name), None)
+    if agent is None:
+        return ""
+    profile = next((item for item in config.models if item.name == agent.model), None)
+    return profile.model_id if profile is not None else agent.model
+
+
+def _speaker_message_counts(history: ChatHistory) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for message in history.messages:
+        if message.role != AuthorRole.ASSISTANT or not message.name:
+            continue
+        counts[message.name] = counts.get(message.name, 0) + 1
+    return counts
+
+
+def _participant_contract(session: SessionState) -> list[dict[str, Any]]:
+    counts = _speaker_message_counts(session.history)
+    selected = set((session.dispatch_state or {}).get("selected_agents") or [])
+    participants: list[dict[str, Any]] = []
+    for index, agent_cfg in enumerate(session.config.agents):
+        is_moderator = index == session.config.manager_service_index
+        if agent_cfg.final_only:
+            continue
+        if not is_moderator and selected and agent_cfg.name not in selected:
+            continue
+        if not is_moderator and counts.get(agent_cfg.name, 0) == 0:
+            continue
+        participants.append({
+            "name": agent_cfg.name,
+            "role": agent_cfg.description,
+            "model": _agent_model_display(session.config, agent_cfg.name),
+            "is_moderator": is_moderator,
+            "message_count": counts.get(agent_cfg.name, 0),
+            "key_points": ["从讨论记录中提取 3-5 条该 agent 的关键论点"],
+        })
+    return participants
+
+
 def _build_synthesis_prompt(session: SessionState, topic: str, retry: bool = False) -> str:
     dispatch_state = getattr(session, "dispatch_state", None) or {}
     dispatch_plan = dispatch_state.get("dispatch_plan") or {}
     transcript = session.discussion_transcript or "（本轮未进入多 agent 讨论）"
-    prompt = f"""请基于以下会话状态输出最终方案。
+    participants = _participant_contract(session)
+    prompt = f"""请基于以下会话状态输出事后总结仪表盘 JSON。
 
 原始议题：
 {dispatch_state.get("original_topic") or topic}
@@ -611,14 +811,66 @@ def _build_synthesis_prompt(session: SessionState, topic: str, retry: bool = Fal
 讨论记录：
 {transcript}
 
+参与者元数据：
+{json.dumps(participants, ensure_ascii=False)}
+
 输出要求：
-- 直接给出最终推荐方案。
-- 内容要可执行，不要只复述讨论。
-- 不要输出 <think> 或隐藏推理。
+- 只返回 raw JSON，不要 markdown code fence，不要解释文字。
+- 禁止输出 <think> 或隐藏推理。
+- JSON 必须符合这个 schema：
+  {{
+    "schema_version": 2,
+    "participants": [
+      {{
+        "name": "AgentName",
+        "role": "角色描述",
+        "model": "底层 model_id",
+        "is_moderator": false,
+        "message_count": 1,
+        "key_points": ["该 agent 的关键论点 1", "该 agent 的关键论点 2"]
+      }}
+    ],
+    "distilled_conclusion": "≤300 字提炼结论",
+    "degraded": false,
+    "degraded_reason": null
+  }}
+- participants 必须只包含实际发言的 discussion agent；不要包含 Synthesizer。
+- participants[].key_points 是字符串数组，不含 stance/confidence/source。
+- distilled_conclusion 要可执行，不要只复述讨论。
 """
     if retry:
-        prompt += "\n上一次输出为空。现在必须输出非空最终方案。"
+        prompt += "\n上一次输出为空或非法。现在必须输出合法 JSON。"
     return prompt
+
+
+def _strict_retry_synthesis_prompt(session: SessionState, topic: str, invalid_output: str) -> str:
+    snippet = invalid_output[:500].replace("\n", "\\n")
+    return (
+        _build_synthesis_prompt(session, topic, retry=True)
+        + f"\n上次输出非法 JSON：{snippet}\n"
+          "请只输出 valid JSON，不要任何其他字符。temperature=0.1。"
+    )
+
+
+def _parse_discussion_summary_json(content: str) -> DiscussionSummary:
+    cleaned = _strip_hidden_reasoning(content).strip()
+    return DiscussionSummary.model_validate_json(cleaned)
+
+
+def _truncate_text(text: str, limit: int) -> str:
+    normalized = _strip_hidden_reasoning(text).strip()
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[:limit].rstrip()
+
+
+def _degraded_discussion_summary(raw_markdown: str) -> DiscussionSummary:
+    return DiscussionSummary(
+        participants=[],
+        distilled_conclusion=_truncate_text(raw_markdown, 500),
+        degraded=True,
+        degraded_reason="json_parse_failed",
+    )
 
 
 def _build_synthesis_fallback(session: SessionState, topic: str) -> str:
@@ -648,6 +900,7 @@ async def _run_synthesis_phase(websocket: WebSocket, session: SessionState, topi
     await _send_json(websocket, {"type": "phase", "phase": "synthesis", "label": "最终方案"})
 
     final_solution = ""
+    discussion_summary: DiscussionSummary | None = None
     if session.final_agents:
         for agent_cfg, agent in session.final_agents:
             logger.info("synthesis.invoke agent=%s", agent_cfg.name)
@@ -658,16 +911,25 @@ async def _run_synthesis_phase(websocket: WebSocket, session: SessionState, topi
                 )],
             )
             content = _strip_hidden_reasoning(response.message.content or "")
-            if not content:
-                logger.warning("synthesis.empty_retry agent=%s", agent_cfg.name)
+            try:
+                discussion_summary = _parse_discussion_summary_json(content)
+            except Exception:
+                logger.warning("synthesis.json_retry agent=%s", agent_cfg.name)
                 response = await agent.get_response(
                     messages=[ChatMessageContent(
                         role=AuthorRole.USER,
-                        content=_build_synthesis_prompt(session, topic, retry=True),
+                        content=_strict_retry_synthesis_prompt(session, topic, content),
                     )],
                 )
                 content = _strip_hidden_reasoning(response.message.content or "")
-            final_solution = content or _build_synthesis_fallback(session, topic)
+                try:
+                    discussion_summary = _parse_discussion_summary_json(content)
+                except Exception:
+                    logger.warning("synthesis.json_degraded agent=%s", agent_cfg.name)
+                    fallback_content = content or _build_synthesis_fallback(session, topic)
+                    discussion_summary = _degraded_discussion_summary(fallback_content)
+
+            final_solution = discussion_summary.distilled_conclusion
             message = ChatMessageContent(
                 role=AuthorRole.ASSISTANT,
                 name=response.message.name or agent_cfg.name,
@@ -687,7 +949,8 @@ async def _run_synthesis_phase(websocket: WebSocket, session: SessionState, topi
                 "content": final_solution,
             })
     else:
-        final_solution = _build_synthesis_fallback(session, topic)
+        discussion_summary = _degraded_discussion_summary(_build_synthesis_fallback(session, topic))
+        final_solution = discussion_summary.distilled_conclusion
         await _send_json(websocket, {
             "type": "message",
             "phase": "synthesis",
@@ -698,8 +961,17 @@ async def _run_synthesis_phase(websocket: WebSocket, session: SessionState, topi
 
     session.final_solution = final_solution
     session.discussion_result = final_solution
+    session.discussion_summary = discussion_summary
     if session.dispatch_state is not None:
         session.dispatch_state["final_solution"] = final_solution
+        session.dispatch_state["discussion_summary"] = _to_jsonable(discussion_summary)
+    if discussion_summary is not None:
+        await _send_json(websocket, {
+            "type": "discussion_summary",
+            "phase": "synthesis",
+            "schema_version": 2,
+            "summary": discussion_summary,
+        })
     return final_solution
 
 
@@ -1159,6 +1431,7 @@ async def _run_session_pipeline(
             topic=active_topic,
             discussion_context=final_solution,
             voting_prompt=config.voting.prompt,
+            per_agent_timeout=config.voting.per_agent_timeout_s,
         )
         session.review_result = session.voting_result
         if session.dispatch_state is not None:
@@ -1171,6 +1444,7 @@ async def _run_session_pipeline(
                 "stance": vote.stance,
                 "reason": vote.reason,
                 "confidence": vote.confidence,
+                "source": getattr(vote, "source", "valid"),
             })
 
         await _send_json(websocket, {

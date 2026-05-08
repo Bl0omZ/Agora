@@ -1,8 +1,9 @@
 """Pydantic data models for Agora CLI tool."""
 
 from enum import Enum
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ServiceType(str, Enum):
@@ -30,12 +31,63 @@ class AgentConfig(BaseModel):
     request_timeout: float = Field(240.0, description="Per-request timeout in seconds for this agent's LLM calls.")
 
 
+class ModelProfile(BaseModel):
+    """Reusable model registry entry.
+
+    ``env_var_name`` stores the bare environment variable name (for example
+    ``MIMO_API_KEY``), never the resolved secret value.
+    """
+
+    name: str = Field(..., min_length=1)
+    provider: str = Field(..., min_length=1)
+    base_url: str = Field(..., min_length=1)
+    model_id: str = Field(..., min_length=1)
+    env_var_name: str = Field(..., min_length=1)
+
+
+class ModelProfilePublic(BaseModel):
+    """Public model registry view; intentionally excludes secrets."""
+
+    name: str = Field(..., min_length=1)
+    provider: str = Field(..., min_length=1)
+    base_url: str = Field(..., min_length=1)
+    model_id: str = Field(..., min_length=1)
+    env_var_name: str = Field(..., min_length=1)
+
+
+class AgentConfigPublic(BaseModel):
+    """Public agent view; intentionally excludes api_key/base_url/model_id."""
+
+    name: str
+    description: str
+    model: str
+    is_moderator: bool = False
+    final_only: bool = False
+
+
 class PresetConfig(BaseModel):
     """A named combination of discussion agents."""
 
     label: str = Field(..., description="Display label for this preset.")
     description: str = Field(..., description="Short explanation of the preset focus.")
     agents: list[str] = Field(..., description="Discussion agent names included in this preset.")
+
+
+class PresetAgentPublic(BaseModel):
+    """Public preset member view."""
+
+    name: str
+    description: str
+    model: str | None = None
+
+
+class PresetConfigPublic(BaseModel):
+    """Public preset view."""
+
+    name: str
+    label: str
+    description: str
+    agents: list[PresetAgentPublic]
 
 
 class DiscussionConfig(BaseModel):
@@ -63,6 +115,7 @@ class VotingConfig(BaseModel):
     """Configuration for the voting phase."""
 
     enabled: bool = True
+    per_agent_timeout_s: float = Field(120, description="Per-agent voting timeout in seconds.")
     prompt: str = (
         "Based on the discussion above, cast your vote.\n"
         "Respond with a JSON object: {\"agent_name\": \"YourName\", \"stance\": \"赞成/反对/中立\", "
@@ -117,9 +170,95 @@ class BrainstormConfig(BaseModel):
     )
 
 
+class RuntimeParams(BaseModel):
+    """Aggregated runtime settings exposed to the frontend."""
+
+    max_rounds: int
+    brainstorm_enabled: bool
+    voting_timeout_s: float
+    summary_model: str | None = None
+
+
+class KeyPoint(BaseModel):
+    """A single extracted argument from one participant."""
+
+    agent_name: str
+    text: str
+
+
+class AgentParticipant(BaseModel):
+    """Participant summary for the discussion dashboard."""
+
+    name: str
+    role: str
+    model: str
+    is_moderator: bool
+    message_count: int
+    key_points: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_keypoint_objects(cls, data):
+        """Accept legacy KeyPoint objects while serializing as string chips."""
+        if not isinstance(data, dict):
+            return data
+        key_points = data.get("key_points")
+        if isinstance(key_points, list):
+            data = dict(data)
+            data["key_points"] = [
+                item.get("text", "") if isinstance(item, dict) else str(item)
+                for item in key_points
+            ]
+        return data
+
+
+class DiscussionSummary(BaseModel):
+    """Structured synthesis payload sent as the discussion_summary WS event."""
+
+    schema_version: int = 2
+    participants: list[AgentParticipant]
+    distilled_conclusion: str
+    degraded: bool = False
+    degraded_reason: Literal["json_parse_failed", "synthesis_truncated"] | None = None
+
+
+class AppConfigPublic(BaseModel):
+    """Public config payload; intentionally excludes all secret-bearing fields."""
+
+    models: list[ModelProfilePublic] = Field(default_factory=list)
+    agents: list[AgentConfigPublic]
+    presets: list[PresetConfigPublic] = Field(default_factory=list)
+    runtime: RuntimeParams
+
+
+class ConfigPayload(BaseModel):
+    """Writable config payload used for schema validation before atomic replace."""
+
+    models: list[ModelProfile] = Field(default_factory=list)
+    agents: list[AgentConfig]
+    presets: dict[str, PresetConfig] = Field(default_factory=dict)
+    default_preset: str | None = None
+    discussion: DiscussionConfig = DiscussionConfig()
+    voting: VotingConfig = VotingConfig()
+    brainstorm: BrainstormConfig = BrainstormConfig()
+    manager_service_index: int = 0
+    supports_structured_output: bool = True
+    summary_model: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_summary_model(self) -> "ConfigPayload":
+        if self.summary_model is None:
+            return self
+        registry_names = {profile.name for profile in self.models}
+        if self.summary_model not in registry_names:
+            raise ValueError("summary_model must reference a model registry name")
+        return self
+
+
 class AppConfig(BaseModel):
     """Top-level application configuration."""
 
+    models: list[ModelProfile] = Field(default_factory=list)
     agents: list[AgentConfig]
     presets: dict[str, PresetConfig] = Field(default_factory=dict)
     default_preset: str | None = None
@@ -133,3 +272,13 @@ class AppConfig(BaseModel):
         True,
         description="Whether endpoints support structured output. Set false to fallback to prompt+regex.",
     )
+    summary_model: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_summary_model(self) -> "AppConfig":
+        if self.summary_model is None:
+            return self
+        registry_names = {profile.name for profile in self.models}
+        if self.summary_model not in registry_names:
+            raise ValueError("summary_model must reference a model registry name")
+        return self

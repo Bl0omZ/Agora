@@ -4,7 +4,7 @@ import logging
 
 from semantic_kernel.contents import AuthorRole, ChatHistory, ChatMessageContent
 
-from .loader import create_agent, create_service, resolve_preset
+from .loader import create_agent, create_service, resolve_agent_runtime_config, resolve_preset
 from .discussion import build_discussion_transcript, run_discussion, run_followup
 from .models import AppConfig
 from .reporting import get_default_report_dir, save_report
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 async def run_pipeline(config: AppConfig, topic: str) -> None:
     """Main pipeline: discussion → final agents → voting → follow-up loop → confirmation."""
 
-    manager_config = config.agents[config.manager_service_index]
+    manager_config = resolve_agent_runtime_config(config, config.agents[config.manager_service_index])
     selected_discussion_names = {agent.name for agent in resolve_preset(config)}
     # Separate discussion agents from final_only agents
     discussion_agents = []
@@ -24,11 +24,12 @@ async def run_pipeline(config: AppConfig, topic: str) -> None:
     for index, ac in enumerate(config.agents):
         if index == config.manager_service_index:
             continue
+        runtime_agent_config = resolve_agent_runtime_config(config, ac)
         if ac.final_only:
-            agent = create_agent(ac)
+            agent = create_agent(runtime_agent_config)
             final_agents.append((ac, agent))
         elif ac.name in selected_discussion_names:
-            agent = create_agent(ac)
+            agent = create_agent(runtime_agent_config)
             discussion_agents.append(agent)
         else:
             logger.info("Skipping agent not in default preset: %s", ac.name)
@@ -96,6 +97,7 @@ async def run_pipeline(config: AppConfig, topic: str) -> None:
             topic=topic,
             discussion_context=discussion_transcript or discussion_result or "",
             voting_prompt=config.voting.prompt,
+            per_agent_timeout=config.voting.per_agent_timeout_s,
         )
 
         print()
