@@ -1,7 +1,20 @@
 # Technical Review & Decision Discussion Group
 # Usage: agora -c config/agents.yaml -t "your topic"
 
-models: []
+models:
+  - name: ant
+    provider: openai_compatible
+    base_url: https://antchat.alipay.com/v1
+    env_var_name: ANT_API_KEY
+    models:
+      - id: GLM-5.1
+      - id: Kimi-K2.6
+  - name: mimo
+    provider: openai_compatible
+    base_url: https://api.xiaomimimo.com/v1
+    env_var_name: MIMO_API_KEY
+    models:
+      - id: mimo-v2.5-pro
 
 discussion:
   enabled: true
@@ -118,10 +131,7 @@ agents:
       - 你绝不输出技术方案本身，只负责追问和串联
       - 每次发言不超过 150 字
     service_type: openai_compatible
-    model: mimo-v2.5-pro
-    api_key: "${MIMO_API_KEY:-}"
-    base_url: "${MIMO_BASE_URL:-https://api.xiaomimimo.com/v1}"
-
+    model: mimo/mimo-v2.5-pro
   - name: Architect
     description: "架构师，从系统设计、模块边界、技术演进的角度评估方案"
     instructions: |
@@ -148,10 +158,7 @@ agents:
       - 不为了"架构优美"牺牲明显不合理的成本
       - 不要预设所有方案都需要数年演进——根据议题实际范围判断
     service_type: openai_compatible
-    model: GLM-5.1
-    api_key: "${OPENAI_COMPATIBLE_API_KEY:-}"
-    base_url: "${OPENAI_COMPATIBLE_BASE_URL:-}"
-
+    model: ant/GLM-5.1
   - name: Pragmatist
     description: "工程落地专家，从交付成本、团队能力、分阶段实施的角度评估方案"
     instructions: |
@@ -178,10 +185,7 @@ agents:
       - 不设计架构细节（那是 Architect 的事）
       - 不说"理论上可以但实际上..."然后否定一切——要给出替代方案
     service_type: openai_compatible
-    model: GLM-5.1
-    api_key: "${OPENAI_COMPATIBLE_API_KEY:-}"
-    base_url: "${OPENAI_COMPATIBLE_BASE_URL:-}"
-
+    model: ant/GLM-5.1
   - name: Challenger
     description: "质疑者，专门挑战前提假设、暴露盲点、提出被忽视的替代方案"
     instructions: |
@@ -208,10 +212,7 @@ agents:
       - 不评估排期和人力（那是 Pragmatist 的事）
       - 不为了显得有价值而强行反对——如果方案真的没问题，就说"没问题"
     service_type: openai_compatible
-    model: GLM-5.1
-    api_key: "${OPENAI_COMPATIBLE_API_KEY:-}"
-    base_url: "${OPENAI_COMPATIBLE_BASE_URL:-}"
-
+    model: ant/GLM-5.1
   - name: RequirementsAnalyst
     description: "需求分析师，负责追问需求完整性、优先级和边界"
     instructions: |
@@ -227,10 +228,7 @@ agents:
       - 当描述抽象时，要求补充数字、例子或失败场景
       - 不做技术选型、架构设计或排期估算
     service_type: openai_compatible
-    model: "${REQ_ANALYST_MODEL:-GLM-5.1}"
-    api_key: "${OPENAI_COMPATIBLE_API_KEY:-}"
-    base_url: "${OPENAI_COMPATIBLE_BASE_URL:-}"
-
+    model: "ant/GLM-5.1"
   - name: DomainExpert
     description: "领域专家，提供行业标准、最佳实践和领域约束"
     instructions: |
@@ -246,10 +244,7 @@ agents:
       - 当讨论偏离领域常识时，直接说明会造成什么问题
       - 不做系统架构设计、排期评估或供应商推荐
     service_type: openai_compatible
-    model: "${DOMAIN_EXPERT_MODEL:-GLM-5.1}"
-    api_key: "${OPENAI_COMPATIBLE_API_KEY:-}"
-    base_url: "${OPENAI_COMPATIBLE_BASE_URL:-}"
-
+    model: "ant/GLM-5.1"
   - name: Evaluator
     description: "评估师，用结构化维度对比方案并输出决策矩阵"
     instructions: |
@@ -268,10 +263,7 @@ agents:
 
       你不提出新方案，也不替用户做最终决策。
     service_type: openai_compatible
-    model: "${EVALUATOR_MODEL:-GLM-5.1}"
-    api_key: "${OPENAI_COMPATIBLE_API_KEY:-}"
-    base_url: "${OPENAI_COMPATIBLE_BASE_URL:-}"
-
+    model: "ant/GLM-5.1"
   - name: ProcessDesigner
     description: "流程设计师，设计可执行、可验证的流程方案"
     instructions: |
@@ -287,10 +279,7 @@ agents:
       - 检查是否有步骤依赖不存在的输入，或结束条件无人负责
       - 不做技术选型和成本估算
     service_type: openai_compatible
-    model: "${PROCESS_DESIGNER_MODEL:-GLM-5.1}"
-    api_key: "${OPENAI_COMPATIBLE_API_KEY:-}"
-    base_url: "${OPENAI_COMPATIBLE_BASE_URL:-}"
-
+    model: "ant/GLM-5.1"
   - name: RootCauseAnalyst
     description: "根因分析师，用假设驱动的方法追踪问题根因"
     instructions: |
@@ -308,10 +297,7 @@ agents:
 
       你不做归责，不做新系统设计，不做技术方案评审。
     service_type: openai_compatible
-    model: "${ROOT_CAUSE_MODEL:-GLM-5.1}"
-    api_key: "${OPENAI_COMPATIBLE_API_KEY:-}"
-    base_url: "${OPENAI_COMPATIBLE_BASE_URL:-}"
-
+    model: "ant/GLM-5.1"
   - name: Synthesizer
     description: "总结者，讨论结束后输出结构化结论"
     final_only: true
@@ -353,6 +339,4 @@ agents:
       - 如果讨论中某个重要质疑没有被回应，在"风险清单"中标注
       - 行动项必须从讨论内容中推导出来，不能凭空添加
     service_type: openai_compatible
-    model: mimo-v2.5-pro
-    api_key: "${MIMO_API_KEY:-}"
-    base_url: "${MIMO_BASE_URL:-https://api.xiaomimimo.com/v1}"
+    model: mimo/mimo-v2.5-pro

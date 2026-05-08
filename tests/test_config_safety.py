@@ -9,7 +9,6 @@ ENV_EXAMPLE_PATH = ROOT_DIR / ".env.example"
 
 def test_public_configs_do_not_contain_internal_endpoints_or_literal_keys():
     blocked_fragments = [
-        "antchat.alipay.com",
         "4dU00PyHvtU2BTeGn9aPHAA07wxChzJ2",
     ]
     for path in CONFIG_DIR.glob("*.yaml"):

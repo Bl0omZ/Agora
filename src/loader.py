@@ -119,9 +119,17 @@ def resolve_agent_runtime_config(config: AppConfig, agent: AgentConfig) -> Agent
     Registry hits fully override inline model/base_url/api_key fields. Registry
     misses keep the legacy inline path unchanged for migration compatibility.
     """
-    profile = _registry_by_name(config).get(agent.model)
+    if "/" not in agent.model:
+        return agent
+    provider_name, model_id = agent.model.split("/", 1)
+    profile = _registry_by_name(config).get(provider_name)
     if profile is None:
         return agent
+    if model_id not in profile.models:
+        raise ValueError(
+            f"agent {agent.name}.model={agent.model} references unknown model_id. "
+            f"Available for {provider_name}: {profile.models}"
+        )
 
     if agent.base_url or agent.api_key:
         logger.warning(
@@ -133,7 +141,7 @@ def resolve_agent_runtime_config(config: AppConfig, agent: AgentConfig) -> Agent
     api_key_ref = f"${{{profile.env_var_name}:-}}" if profile.env_var_name else None
     return agent.model_copy(update={
         "service_type": _provider_to_service_type(profile.provider),
-        "model": profile.model_id,
+        "model": model_id,
         "api_key": api_key_ref,
         "base_url": profile.base_url,
         "endpoint": None,

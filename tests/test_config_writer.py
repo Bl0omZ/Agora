@@ -92,7 +92,7 @@ def test_public_models_include_masked_key_from_environment(monkeypatch):
                 "name": "m1",
                 "provider": "openai-compatible",
                 "base_url": "https://example.test/v1",
-                "model_id": "model-1",
+                "models": ["model-1"],
                 "env_var_name": "MODEL_SECRET",
             }
         ],
@@ -124,7 +124,7 @@ def test_update_models_writes_key_to_dotenv_without_yaml_leak(monkeypatch, tmp_p
             "name": "m1",
             "provider": "openai-compatible",
             "base_url": "https://example.test/v1",
-            "model_id": "model-1",
+            "models": ["model-1"],
             "env_var_name": "MODEL_SECRET",
             "key": "sk-new-secret",
         }
@@ -135,8 +135,8 @@ def test_update_models_writes_key_to_dotenv_without_yaml_leak(monkeypatch, tmp_p
             "name": "m1",
             "provider": "openai-compatible",
             "base_url": "https://example.test/v1",
-            "model_id": "model-1",
             "env_var_name": "MODEL_SECRET",
+            "models": [{"id": "model-1"}],
         }
     ]
     dotenv_text = dotenv_path.read_text(encoding="utf-8")
