@@ -27,6 +27,8 @@ from .models import (
 
 SECRET_EXCLUDE_FIELDS = {"api_key", "secret", "token"}
 ENV_TEMPLATE_RE = re.compile(r"^\$\{(\w+)(?::-[^}]*)?}$")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DOTENV_PATH = PROJECT_ROOT / ".env"
 
 
 class ConfigWriteError(ValueError):
@@ -68,8 +70,47 @@ def _bare_env_name(value: str | None) -> str:
     return value.strip()
 
 
+def _mask_key(key: str) -> str:
+    """Return a short preview of a secret without exposing the full value."""
+    if len(key) <= 8:
+        return key[:2] + "****" + key[-2:]
+    return key[:6] + "****" + key[-4:]
+
+
+def _write_dotenv_key(env_var_name: str, key: str, dotenv_path: Path | None = None) -> None:
+    """Update or append one key in .env without changing other lines."""
+    dotenv_path = dotenv_path or DOTENV_PATH
+    lines = dotenv_path.read_text(encoding="utf-8").splitlines() if dotenv_path.exists() else []
+    prefix = f"{env_var_name}="
+    updated_line = f"{env_var_name}={key}"
+    updated = False
+    next_lines: list[str] = []
+    for line in lines:
+        if line.startswith(prefix):
+            if not updated:
+                next_lines.append(updated_line)
+                updated = True
+            continue
+        next_lines.append(line)
+    if not updated:
+        next_lines.append(updated_line)
+    dotenv_path.write_text("\n".join(next_lines) + "\n", encoding="utf-8")
+    os.environ[env_var_name] = key
+
+
 def _public_models(config: AppConfig) -> list[ModelProfilePublic]:
-    return [ModelProfilePublic.model_validate(profile.model_dump()) for profile in config.models]
+    public_profiles: list[ModelProfilePublic] = []
+    for profile in config.models:
+        key = os.environ.get(profile.env_var_name)
+        public_profiles.append(ModelProfilePublic(
+            name=profile.name,
+            provider=profile.provider,
+            base_url=profile.base_url,
+            model_id=profile.model_id,
+            env_var_name=profile.env_var_name,
+            key_masked=_mask_key(key) if key else None,
+        ))
+    return public_profiles
 
 
 def _public_agents(config: AppConfig) -> list[AgentConfigPublic]:
@@ -168,8 +209,11 @@ def assert_etag_matches(path: Path, if_match: str | None) -> None:
 def update_models(raw: dict[str, Any], payload: Any) -> dict[str, Any]:
     data = payload.get("models", payload) if isinstance(payload, dict) else payload
     profiles = [ModelProfile.model_validate(item) for item in data]
+    for profile in profiles:
+        if profile.key:
+            _write_dotenv_key(profile.env_var_name, profile.key)
     updated = dict(raw)
-    updated["models"] = [profile.model_dump() for profile in profiles]
+    updated["models"] = [profile.model_dump(exclude={"key"}) for profile in profiles]
     return updated
 
 

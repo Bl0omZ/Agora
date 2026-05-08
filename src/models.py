@@ -43,6 +43,7 @@ class ModelProfile(BaseModel):
     base_url: str = Field(..., min_length=1)
     model_id: str = Field(..., min_length=1)
     env_var_name: str = Field(..., min_length=1)
+    key: str | None = Field(None, exclude=True)
 
 
 class ModelProfilePublic(BaseModel):
@@ -53,6 +54,7 @@ class ModelProfilePublic(BaseModel):
     base_url: str = Field(..., min_length=1)
     model_id: str = Field(..., min_length=1)
     env_var_name: str = Field(..., min_length=1)
+    key_masked: str | None = None
 
 
 class AgentConfigPublic(BaseModel):
