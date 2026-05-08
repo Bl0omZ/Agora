@@ -750,8 +750,11 @@ def _agent_model_display(config: AppConfig, agent_name: str) -> str:
     agent = next((item for item in config.agents if item.name == agent_name), None)
     if agent is None:
         return ""
-    profile = next((item for item in config.models if item.name == agent.model), None)
-    return profile.model_id if profile is not None else agent.model
+    if "/" not in agent.model:
+        return agent.model
+    provider_name, model_id = agent.model.split("/", 1)
+    profile = next((item for item in config.models if item.name == provider_name), None)
+    return model_id if profile is not None and model_id in profile.models else agent.model
 
 
 def _speaker_message_counts(history: ChatHistory) -> dict[str, int]:

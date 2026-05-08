@@ -98,16 +98,35 @@ def _write_dotenv_key(env_var_name: str, key: str, dotenv_path: Path | None = No
     os.environ[env_var_name] = key
 
 
+def _resolve_env_templates(value: str) -> str:
+    """Resolve ${VAR:-default} references against os.environ.
+
+    Returns empty string for unconfigured variables so the frontend can
+    show a clear configuration prompt instead of raw template syntax.
+    """
+    def _repl(m: re.Match[str]) -> str:
+        resolved = os.environ.get(m.group(1))
+        if resolved:
+            return resolved
+        default = m.group(2)
+        if default is not None and default.strip():
+            return default
+        return ""
+
+    return re.sub(r"\$\{(\w+)(?::-(.*?))?\}", _repl, value)
+
+
 def _public_models(config: AppConfig) -> list[ModelProfilePublic]:
     public_profiles: list[ModelProfilePublic] = []
     for profile in config.models:
-        key = os.environ.get(profile.env_var_name)
+        env_var_name = profile.env_var_name or f"{profile.name.upper()}_API_KEY"
+        key = os.environ.get(env_var_name)
         public_profiles.append(ModelProfilePublic(
             name=profile.name,
             provider=profile.provider,
-            base_url=profile.base_url,
-            model_id=profile.model_id,
-            env_var_name=profile.env_var_name,
+            base_url=_resolve_env_templates(profile.base_url),
+            env_var_name=env_var_name,
+            models=profile.models,
             key_masked=_mask_key(key) if key else None,
         ))
     return public_profiles
@@ -211,9 +230,18 @@ def update_models(raw: dict[str, Any], payload: Any) -> dict[str, Any]:
     profiles = [ModelProfile.model_validate(item) for item in data]
     for profile in profiles:
         if profile.key:
-            _write_dotenv_key(profile.env_var_name, profile.key)
+            _write_dotenv_key(profile.env_var_name or f"{profile.name.upper()}_API_KEY", profile.key)
     updated = dict(raw)
-    updated["models"] = [profile.model_dump(exclude={"key"}) for profile in profiles]
+    updated["models"] = [
+        {
+            "name": profile.name,
+            "provider": profile.provider,
+            "base_url": profile.base_url,
+            "env_var_name": profile.env_var_name or f"{profile.name.upper()}_API_KEY",
+            "models": [{"id": model_id} for model_id in profile.models],
+        }
+        for profile in profiles
+    ]
     return updated
 
 
@@ -276,7 +304,8 @@ def update_agents(raw: dict[str, Any], payload: Any) -> tuple[dict[str, Any], li
             "model": draft.model,
             "final_only": draft.final_only,
         })
-        if draft.model in registry_names:
+        provider_name = draft.model.split("/", 1)[0] if "/" in draft.model else draft.model
+        if provider_name in registry_names:
             fields: list[str] = []
             for field in ("base_url", "api_key"):
                 if field in agent:

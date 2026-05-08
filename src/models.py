@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ServiceType(str, Enum):
@@ -41,9 +41,22 @@ class ModelProfile(BaseModel):
     name: str = Field(..., min_length=1)
     provider: str = Field(..., min_length=1)
     base_url: str = Field(..., min_length=1)
-    model_id: str = Field(..., min_length=1)
-    env_var_name: str = Field(..., min_length=1)
+    env_var_name: str | None = None
+    models: list[str] = Field(..., min_length=1)
     key: str | None = Field(None, exclude=True)
+
+    @field_validator("models", mode="before")
+    @classmethod
+    def _normalize_models(cls, value):
+        if not isinstance(value, list):
+            return value
+        return [item.get("id") if isinstance(item, dict) else item for item in value]
+
+    @model_validator(mode="after")
+    def _default_env_var_name(self) -> "ModelProfile":
+        if not self.env_var_name:
+            self.env_var_name = f"{self.name.upper()}_API_KEY"
+        return self
 
 
 class ModelProfilePublic(BaseModel):
@@ -51,9 +64,9 @@ class ModelProfilePublic(BaseModel):
 
     name: str = Field(..., min_length=1)
     provider: str = Field(..., min_length=1)
-    base_url: str = Field(..., min_length=1)
-    model_id: str = Field(..., min_length=1)
+    base_url: str = Field(default="")
     env_var_name: str = Field(..., min_length=1)
+    models: list[str] = Field(..., min_length=1)
     key_masked: str | None = None
 
 
@@ -251,9 +264,12 @@ class ConfigPayload(BaseModel):
     def _validate_summary_model(self) -> "ConfigPayload":
         if self.summary_model is None:
             return self
-        registry_names = {profile.name for profile in self.models}
-        if self.summary_model not in registry_names:
-            raise ValueError("summary_model must reference a model registry name")
+        if "/" not in self.summary_model:
+            raise ValueError("summary_model must use provider/model_id format")
+        provider_name, model_id = self.summary_model.split("/", 1)
+        registry = {profile.name: profile for profile in self.models}
+        if provider_name not in registry or model_id not in registry[provider_name].models:
+            raise ValueError("summary_model must reference a model registry model")
         return self
 
 
@@ -280,7 +296,10 @@ class AppConfig(BaseModel):
     def _validate_summary_model(self) -> "AppConfig":
         if self.summary_model is None:
             return self
-        registry_names = {profile.name for profile in self.models}
-        if self.summary_model not in registry_names:
-            raise ValueError("summary_model must reference a model registry name")
+        if "/" not in self.summary_model:
+            raise ValueError("summary_model must use provider/model_id format")
+        provider_name, model_id = self.summary_model.split("/", 1)
+        registry = {profile.name: profile for profile in self.models}
+        if provider_name not in registry or model_id not in registry[provider_name].models:
+            raise ValueError("summary_model must reference a model registry model")
         return self

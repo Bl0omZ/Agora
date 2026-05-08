@@ -44,7 +44,7 @@ def test_registry_hit_overrides_inline_fields_and_warns(monkeypatch, tmp_path: P
                     "name": "mimo-pro",
                     "provider": "openai-compatible",
                     "base_url": "https://registry.example/v1",
-                    "model_id": "real-model",
+                    "models": [{"id": "real-model"}],
                     "env_var_name": "REGISTRY_KEY",
                 }
             ],
@@ -54,7 +54,7 @@ def test_registry_hit_overrides_inline_fields_and_warns(monkeypatch, tmp_path: P
                     "name": "Host",
                     "description": "host",
                     "instructions": "host",
-                    "model": "mimo-pro",
+                    "model": "mimo-pro/real-model",
                     "api_key": "${INLINE_KEY:-}",
                     "base_url": "https://inline.example/v1",
                 }

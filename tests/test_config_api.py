@@ -13,10 +13,10 @@ def _config_path(tmp_path: Path) -> Path:
     raw = {
         "models": [
             {
-                "name": "mimo-pro",
+                "name": "mimo",
                 "provider": "openai-compatible",
                 "base_url": "https://example.api/v1",
-                "model_id": "mimo-pro",
+                "models": ["mimo-pro"],
                 "env_var_name": "OPENAI_API_KEY",
             }
         ],
@@ -27,7 +27,7 @@ def _config_path(tmp_path: Path) -> Path:
                 "name": "Host",
                 "description": "主持人",
                 "instructions": "host",
-                "model": "mimo-pro",
+                "model": "mimo/mimo-pro",
                 "api_key": "${OPENAI_API_KEY:-}",
                 "base_url": "https://inline.example/v1",
             },
@@ -118,17 +118,17 @@ def test_put_requires_current_etag(client):
     assert response.json()["error"]["detail"] == "config_modified_elsewhere"
 
 
-def test_put_illegal_model_id_keeps_original_file(client):
+def test_put_empty_models_keeps_original_file(client):
     test_client, path = client
     before = path.read_text(encoding="utf-8")
     etag = test_client.get("/api/config").headers["etag"]
     models = test_client.get("/api/config/models").json()["models"]
-    models[0]["model_id"] = ""
+    models[0]["models"] = []
 
     response = test_client.put("/api/config/models", headers={"If-Match": etag}, json=models)
 
     assert response.status_code == 422
-    assert "model_id" in response.text
+    assert "models" in response.text
     assert path.read_text(encoding="utf-8") == before
 
 
@@ -155,7 +155,7 @@ def test_put_agents_sanitizes_inline_model_fields(client):
     test_client, path = client
     etag = test_client.get("/api/config").headers["etag"]
     agents = test_client.get("/api/config/agents").json()["agents"]
-    agents[1]["model"] = "mimo-pro"
+    agents[1]["model"] = "mimo/mimo-pro"
 
     response = test_client.put("/api/config/agents", headers={"If-Match": etag}, json=agents)
 
