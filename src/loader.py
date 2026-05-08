@@ -12,7 +12,7 @@ from semantic_kernel.agents import ChatCompletionAgent
 from semantic_kernel.connectors.ai.chat_completion_client_base import ChatCompletionClientBase
 from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion, OpenAIChatCompletion
 
-from .models import AgentConfig, AppConfig, ServiceType
+from .models import AgentConfig, AppConfig, ModelProfile, ServiceType
 from .openai_sse_proxy import SSEProxyAsyncOpenAI
 
 logger = logging.getLogger(__name__)
@@ -91,11 +91,53 @@ def load_config(path: str) -> AppConfig:
 
     # Validate environment variables are available
     for agent in config.agents:
-        resolve_env_vars(agent.api_key)
-        resolve_env_vars(agent.base_url)
-        resolve_env_vars(agent.endpoint)
+        runtime_agent = resolve_agent_runtime_config(config, agent)
+        resolve_env_vars(runtime_agent.api_key)
+        resolve_env_vars(runtime_agent.base_url)
+        resolve_env_vars(runtime_agent.endpoint)
 
     return config
+
+
+def _provider_to_service_type(provider: str) -> ServiceType:
+    """Map registry provider identifiers to existing service types."""
+    normalized = provider.strip().lower().replace("-", "_")
+    try:
+        return ServiceType(normalized)
+    except ValueError:
+        logger.warning("Unknown model provider '%s'; using openai_compatible", provider)
+        return ServiceType.OPENAI_COMPATIBLE
+
+
+def _registry_by_name(config: AppConfig) -> dict[str, ModelProfile]:
+    return {profile.name: profile for profile in config.models}
+
+
+def resolve_agent_runtime_config(config: AppConfig, agent: AgentConfig) -> AgentConfig:
+    """Return the effective runtime agent config after model-registry resolution.
+
+    Registry hits fully override inline model/base_url/api_key fields. Registry
+    misses keep the legacy inline path unchanged for migration compatibility.
+    """
+    profile = _registry_by_name(config).get(agent.model)
+    if profile is None:
+        return agent
+
+    if agent.base_url or agent.api_key:
+        logger.warning(
+            "agent %s.model=%s resolved from registry; inline base_url/api_key ignored",
+            agent.name,
+            agent.model,
+        )
+
+    api_key_ref = f"${{{profile.env_var_name}:-}}" if profile.env_var_name else None
+    return agent.model_copy(update={
+        "service_type": _provider_to_service_type(profile.provider),
+        "model": profile.model_id,
+        "api_key": api_key_ref,
+        "base_url": profile.base_url,
+        "endpoint": None,
+    })
 
 
 def _discussion_agent_configs(config: AppConfig) -> list[AgentConfig]:
