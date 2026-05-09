@@ -7,6 +7,7 @@ import type {
   VotingResult,
   PipelineLog,
   AgentSystemBlueprint,
+  DiscussionSummary,
 } from '../types';
 import { SessionManager } from '../utils/session';
 
@@ -23,6 +24,7 @@ interface UseSessionReturn {
     blueprintWarnings?: string[];
     logs?: PipelineLog[];
     savedPath?: string | null;
+    discussionSummary?: DiscussionSummary | null;
   }) => void;
   loadHistorySession: (id: string) => SessionData | null;
   loadHistorySessionAsync: (id: string) => Promise<SessionData | null>;

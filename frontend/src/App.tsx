@@ -15,6 +15,7 @@ import {
   printAsPdf,
   captureScreenshot,
   exportBlueprint,
+  exportSolution,
 } from './utils/export';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { TopBar } from './components/TopBar/TopBar';
@@ -24,7 +25,8 @@ import { Timeline } from './components/Timeline/Timeline';
 
 import { InputBar } from './components/InputBar/InputBar';
 import { Welcome } from './components/Welcome/Welcome';
-import { SettingsPanel } from './components/Settings/SettingsPanel';
+import { SettingsPage } from './pages/SettingsPage';
+import { useConfigApi } from './hooks/useConfigApi';
 import { ReportViewer } from './components/Report/ReportViewer';
 import { LeaveConfirm } from './components/LeaveConfirm/LeaveConfirm';
 import { SessionDeleteConfirm } from './components/SessionDeleteConfirm/SessionDeleteConfirm';
@@ -70,12 +72,39 @@ export function App() {
   return <MainApp />;
 }
 
+function SettingsRouteWrapper() {
+  const { config, etag, loading, error, refetch, saveAll } = useConfigApi();
+  const handleBack = () => { window.location.hash = ''; };
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+      {loading || !config ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-muted)', flexDirection: 'column', gap: 8 }}>
+          {error ? `加载失败：${error}` : '加载配置中…'}
+          {error && (
+            <button type="button" onClick={refetch}>重试</button>
+          )}
+        </div>
+      ) : (
+        <SettingsPage
+          initialConfig={config}
+          etag={etag}
+          onSave={saveAll}
+          onBack={handleBack}
+        />
+      )}
+    </div>
+  );
+}
+
 function MainApp() {
   const ws = useWebSocket();
   const session = useSession();
 
   const [reports, setReports] = useState<ReportEntry[]>([]);
-  const [showSettings, setShowSettings] = useState(false);
+  const [settingsRoute, setSettingsRoute] = useState(
+    () => window.location.hash.startsWith('#/settings'),
+  );
   const [viewingReport, setViewingReport] = useState<ReportEntry | null>(null);
   const [config, setConfig] = useState<DiscussionConfig>({ maxRounds: 3, model: null });
   const [historyData, setHistoryData] = useState<SessionData | null>(null);
@@ -94,6 +123,13 @@ function MainApp() {
       .catch(() => setReports([]));
   }, [ws.savedPath]);
 
+  // Settings hash route 监听：#/settings 切到独立设置页
+  useEffect(() => {
+    const onHash = () => setSettingsRoute(window.location.hash.startsWith('#/settings'));
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
   // Persist session data on change
   useEffect(() => {
     if (ws.currentTopic && ws.messages.length > 0) {
@@ -103,6 +139,7 @@ function MainApp() {
         votingResult: ws.votingResult,
         blueprint: ws.blueprint,
         blueprintWarnings: ws.blueprintWarnings,
+        discussionSummary: ws.discussionSummary,
         logs: ws.logs,
         savedPath: ws.savedPath,
       });
@@ -113,6 +150,7 @@ function MainApp() {
     ws.votingResult,
     ws.blueprint,
     ws.blueprintWarnings,
+    ws.discussionSummary,
     ws.logs,
     ws.savedPath,
   ]);
@@ -129,6 +167,7 @@ function MainApp() {
         votingResult: ws.votingResult,
         blueprint: ws.blueprint,
         blueprintWarnings: ws.blueprintWarnings,
+        discussionSummary: ws.discussionSummary,
         logs: ws.logs,
         savedPath: ws.savedPath,
         createdAt: Date.now(),
@@ -147,6 +186,7 @@ function MainApp() {
     ws.votingResult,
     ws.blueprint,
     ws.blueprintWarnings,
+    ws.discussionSummary,
     ws.logs,
     ws.savedPath,
   ]);
@@ -198,6 +238,15 @@ function MainApp() {
       alert(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
   }, [session.isHistoryMode, historyData?.blueprint, ws.blueprint]);
+
+  const handleExportSolution = useCallback(() => {
+    const topic = session.isHistoryMode && historyData ? historyData.topic : ws.currentTopic;
+    const summary = session.isHistoryMode ? null : ws.discussionSummary;
+    const vr = session.isHistoryMode && historyData ? historyData.votingResult : ws.votingResult;
+    exportSolution(topic, summary, vr).catch((error) => {
+      console.error('方案导出失败:', error);
+    });
+  }, [session.isHistoryMode, historyData, ws.currentTopic, ws.discussionSummary, ws.votingResult]);
 
   // --- Unsaved-work guard ---
   // 当前会话有内容、未保存为报告、且不是历史模式时，"离开" 需要确认
@@ -288,6 +337,9 @@ function MainApp() {
   const displayVotingResult = isViewingHistory ? historyData.votingResult : ws.votingResult;
   const displayBlueprint = isViewingHistory ? historyData.blueprint ?? null : ws.blueprint;
   const displayBlueprintWarnings = isViewingHistory ? historyData.blueprintWarnings ?? [] : ws.blueprintWarnings;
+  const displayDiscussionSummary = isViewingHistory
+    ? historyData?.discussionSummary ?? null
+    : ws.discussionSummary;
 
   // Find thinking agent
   const thinkingAgent = Object.values(ws.agentStates).find(a => a.status === 'thinking')?.name ?? null;
@@ -298,6 +350,25 @@ function MainApp() {
     !ws.error &&
     ws.votingResult !== null
   );
+
+  if (settingsRoute) {
+    return (
+      <div className={styles.layout}>
+        <Sidebar
+          sessions={session.sessions}
+          currentSessionId={session.currentSessionId}
+          reports={reports}
+          onSelectSession={handleSelectSession}
+          onDeleteSession={handleDeleteSession}
+          onNewSession={handleNewSession}
+          onSelectReport={setViewingReport}
+        />
+        <main className={styles.main}>
+          <SettingsRouteWrapper />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.layout}>
@@ -322,7 +393,8 @@ function MainApp() {
               onExportMarkdown={handleExportMarkdown}
               onExportPdf={handleExportPdf}
               onExportScreenshot={handleExportScreenshot}
-              onToggleSettings={() => setShowSettings(prev => !prev)}
+              onExportSolution={handleExportSolution}
+              onToggleSettings={() => { window.location.hash = '#/settings'; }}
               onSaveReport={handleSaveReport}
               savedPath={isViewingHistory ? historyData.savedPath : ws.savedPath}
             />
@@ -345,6 +417,7 @@ function MainApp() {
                 <AgentStatusPanel
                   agents={ws.agents}
                   agentStates={ws.agentStates}
+                  confirmed={ws.agentsConfirmed}
                 />
               </>
             )}
@@ -357,6 +430,7 @@ function MainApp() {
                 blueprintWarnings={displayBlueprintWarnings}
                 onExportBlueprint={handleExportBlueprint}
                 thinkingAgent={isViewingHistory ? null : thinkingAgent}
+                discussionSummary={displayDiscussionSummary}
               />
             </div>
 
@@ -433,14 +507,6 @@ function MainApp() {
           </>
         )}
       </main>
-
-      {showSettings && (
-        <SettingsPanel
-          currentConfig={config}
-          onApply={setConfig}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
 
       {viewingReport && (
         <ReportViewer

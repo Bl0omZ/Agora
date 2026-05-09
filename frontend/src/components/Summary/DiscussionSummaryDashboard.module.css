@@ -1,0 +1,298 @@
+/*
+ * Discussion Summary Dashboard — 方向 A "Agora Field Notes"
+ * 设计哲学：东方留白 + 5 角色色编码 + 赤土 accent
+ * 全部使用 variables.css 已有 token，不发明新色。
+ */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-large);
+  margin: 16px 0;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: fadeInUp 0.3s ease-out both;
+}
+
+/* --- Header --- */
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  line-height: 1.4;
+}
+
+.headerMeta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+/* --- DegradedBanner --- */
+
+.degraded {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  background: var(--moderator-bg);
+  border: 1px solid var(--moderator-border);
+  border-radius: var(--radius-medium);
+  color: var(--moderator-ink);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.degradedIcon {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+.degradedReason {
+  margin: 2px 0 0;
+  color: var(--moderator-ink);
+  opacity: 0.7;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+/* --- Section labels --- */
+
+.sectionTitle {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+}
+
+/* --- Agent list --- */
+
+.agentList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/*
+ * AgentRow: 整张卡片用左侧 4px 角色色边条 + 圆形头像内填角色色 + chips 同色。
+ * 这是方向 A 的核心视觉签名——agora 的 5 角色色第一次被用足。
+ */
+.agentRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px 12px 14px;
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--border-medium);
+  border-radius: var(--radius-medium);
+  background: var(--bg-card);
+  transition: border-color 0.15s ease;
+}
+
+.agentRow:hover {
+  border-color: var(--border-medium);
+}
+
+/* 5 角色色编码：通过 data-agent attribute 匹配 */
+.agentRow[data-agent="Host"]         { border-left-color: var(--role-host); }
+.agentRow[data-agent="Architect"]    { border-left-color: var(--role-architect); }
+.agentRow[data-agent="Pragmatist"]   { border-left-color: var(--role-pragmatist); }
+.agentRow[data-agent="Challenger"]   { border-left-color: var(--role-challenger); }
+.agentRow[data-agent="Synthesizer"]  { border-left-color: var(--role-synthesizer); }
+
+/* --- Avatar --- */
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  background: var(--bg-hover);
+  color: var(--ink-secondary);
+}
+
+.agentRow[data-agent="Host"] .avatar         { background: var(--role-host-bg);        color: var(--role-host-ink); }
+.agentRow[data-agent="Architect"] .avatar    { background: var(--role-architect-bg);   color: var(--role-architect-ink); }
+.agentRow[data-agent="Pragmatist"] .avatar   { background: var(--role-pragmatist-bg);  color: var(--role-pragmatist-ink); }
+.agentRow[data-agent="Challenger"] .avatar   { background: var(--role-challenger-bg);  color: var(--role-challenger-ink); }
+.agentRow[data-agent="Synthesizer"] .avatar  { background: var(--role-synthesizer-bg); color: var(--role-synthesizer-ink); }
+
+/* moderator 单独标记（is_moderator=true 的 host 给一圈琥珀边） */
+.avatarModerator {
+  box-shadow: 0 0 0 2px var(--moderator-border);
+}
+
+/* --- Body --- */
+
+.agentBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agentHeadRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.agentName {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.agentRole {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.agentHeadRight {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  margin-left: auto;
+}
+
+.modelTag {
+  padding: 2px 8px;
+  border-radius: var(--radius-small);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-light);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+}
+
+.messageCount {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* --- Stance overlay (注入自 voting) --- */
+
+.stanceRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.stance {
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  border: 1px solid transparent;
+  animation: stanceIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.stanceSupport {
+  background: var(--complexity-low-bg);
+  color: var(--complexity-low);
+}
+
+.stanceOppose {
+  background: var(--complexity-high-bg);
+  color: var(--complexity-high);
+}
+
+.stanceNeutral {
+  background: var(--bg-hover);
+  color: var(--ink-muted);
+}
+
+.stanceTimeout,
+.stanceError {
+  background: var(--moderator-soft);
+  color: var(--moderator-ink);
+  border-color: var(--moderator-border);
+}
+
+/* --- KeyPoint chips（chip 底色继承当前 agent 的 role-bg） --- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  background: var(--bg-hover);
+  color: var(--ink-secondary);
+  border: 1px solid var(--border-light);
+}
+
+.agentRow[data-agent="Host"] .chip         { background: var(--role-host-bg);        color: var(--role-host-ink);        border-color: transparent; }
+.agentRow[data-agent="Architect"] .chip    { background: var(--role-architect-bg);   color: var(--role-architect-ink);   border-color: transparent; }
+.agentRow[data-agent="Pragmatist"] .chip   { background: var(--role-pragmatist-bg);  color: var(--role-pragmatist-ink);  border-color: transparent; }
+.agentRow[data-agent="Challenger"] .chip   { background: var(--role-challenger-bg);  color: var(--role-challenger-ink);  border-color: transparent; }
+.agentRow[data-agent="Synthesizer"] .chip  { background: var(--role-synthesizer-bg); color: var(--role-synthesizer-ink); border-color: transparent; }
+
+/* --- Distilled conclusion（赤土 accent 边条 + accent-soft 浅底） --- */
+
+.conclusion {
+  padding: 14px 16px;
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-medium) var(--radius-medium) 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-primary);
+  white-space: pre-wrap;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes stanceIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}

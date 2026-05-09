@@ -4,7 +4,7 @@ import type {
   AgentState, RoundProgress, PipelineLog, DiscussionConfig,
   DiscussionPhase, BrainstormQuestion, BrainstormAnswer,
   TopicRefinedPayload, BrainstormFailureState, AgentSystemBlueprint,
-  PresetRecommendation,
+  PresetRecommendation, DiscussionSummary, AgentVoteOverlay,
 } from '../types';
 
 export type ConnectionStatus = 'disconnected' | 'connected' | 'error';
@@ -38,6 +38,8 @@ export interface WebSocketState {
   votingResult: VotingResult | null;
   blueprint: AgentSystemBlueprint | null;
   blueprintWarnings: string[];
+  discussionSummary: DiscussionSummary | null;
+  agentsConfirmed: boolean;
   isReady: boolean;
   currentTopic: string;
   currentPhase: DiscussionPhase;
@@ -76,6 +78,8 @@ export function useWebSocket(): WebSocketState {
   const [votingResult, setVotingResult] = useState<VotingResult | null>(null);
   const [blueprint, setBlueprint] = useState<AgentSystemBlueprint | null>(null);
   const [blueprintWarnings, setBlueprintWarnings] = useState<string[]>([]);
+  const [discussionSummary, setDiscussionSummary] = useState<DiscussionSummary | null>(null);
+  const [agentsConfirmed, setAgentsConfirmed] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [currentTopic, setCurrentTopic] = useState('');
   const [currentPhase, setCurrentPhase] = useState<DiscussionPhase>('idle');
@@ -202,6 +206,10 @@ export function useWebSocket(): WebSocketState {
           setBlueprintWarnings(data.warnings ?? []);
           break;
 
+        case 'discussion_summary':
+          setDiscussionSummary(data.summary as DiscussionSummary);
+          break;
+
         case 'round_progress':
           setRoundProgress({ current: data.current, total: data.total });
           break;
@@ -261,6 +269,7 @@ export function useWebSocket(): WebSocketState {
         case 'preset_confirmed':
           setPendingPreset(null);
           setIsBrainstormSubmitting(false);
+          setAgentsConfirmed(true);
           break;
 
         case 'brainstorm_timeout':
@@ -277,6 +286,8 @@ export function useWebSocket(): WebSocketState {
           setVotingResult(null);
           setBlueprint(null);
           setBlueprintWarnings([]);
+          setDiscussionSummary(null);
+          setAgentsConfirmed(false);
           setIsReady(false);
           setError(null);
           setSavedPath(null);
@@ -389,7 +400,7 @@ export function useWebSocket(): WebSocketState {
 
   return {
     connectionStatus, messages, phases, agents, agentStates,
-    votingResult, blueprint, blueprintWarnings, isReady, currentTopic, currentPhase,
+    votingResult, blueprint, blueprintWarnings, discussionSummary, agentsConfirmed, isReady, currentTopic, currentPhase,
     roundProgress, logs, error, savedPath,
     pendingQuestion, pendingTopicRefined, pendingPreset, brainstormFailure, isBrainstormSubmitting,
     send, startDiscussion, sendFollowup, saveReport,

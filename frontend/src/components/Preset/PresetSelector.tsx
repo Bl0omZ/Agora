@@ -1,21 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PresetRecommendation } from '../../types';
+import { displayAgentName } from '../../utils/modelName';
 import styles from './PresetSelector.module.css';
-
-const AGENT_DISPLAY_NAMES: Record<string, string> = {
-  Architect: '架构师',
-  Pragmatist: '务实派',
-  Challenger: '挑战者',
-  Evaluator: '评估师',
-  RequirementsAnalyst: '需求分析师',
-  DomainExpert: '领域专家',
-  ProcessDesigner: '流程设计师',
-  RootCauseAnalyst: '根因分析师',
-};
-
-function getAgentDisplayName(name: string): string {
-  return AGENT_DISPLAY_NAMES[name] ?? name;
-}
 
 interface PresetSelectorProps {
   recommendation: PresetRecommendation;
@@ -60,7 +46,7 @@ export function PresetSelector({ recommendation, onConfirm }: PresetSelectorProp
                 </span>
                 <span className={styles.description}>{preset.description}</span>
                 <span className={styles.agents}>
-                  参与者：{preset.agents.map((agent) => getAgentDisplayName(agent.name)).join(' · ')}
+                  参与者：{preset.agents.map((agent) => displayAgentName(agent.name)).join(' · ')}
                 </span>
               </span>
             </button>

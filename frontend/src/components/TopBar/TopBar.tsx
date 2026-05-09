@@ -8,6 +8,7 @@ interface TopBarProps {
   onExportMarkdown: () => void;
   onExportPdf: () => void;
   onExportScreenshot: () => void;
+  onExportSolution: () => void;
   onToggleSettings: () => void;
   onSaveReport: () => void;
   savedPath: string | null;
@@ -16,7 +17,7 @@ interface TopBarProps {
 export function TopBar({
   connectionStatus, isReady,
   onExportMarkdown, onExportPdf, onExportScreenshot,
-  onToggleSettings, onSaveReport, savedPath,
+  onExportSolution, onToggleSettings, onSaveReport, savedPath,
 }: TopBarProps) {
   return (
     <header className={styles.topBar}>
@@ -35,6 +36,9 @@ export function TopBar({
         )}
         {isReady && (
           <>
+            <button className={styles.actionButton} onClick={onExportSolution} title="导出方案报告">
+              方案
+            </button>
             <button className={styles.actionButton} onClick={onExportMarkdown} title="导出 Markdown">
               .md
             </button>
@@ -46,8 +50,8 @@ export function TopBar({
             </button>
           </>
         )}
-        <button className={styles.settingsButton} onClick={onToggleSettings} title="设置">
-          ⚙
+        <button className={styles.settingsButton} onClick={onToggleSettings} title="模型与参数设置">
+          设置
         </button>
       </div>
     </header>

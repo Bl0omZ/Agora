@@ -7,7 +7,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field
 
-from .blueprint import AgentSystemBlueprint
+from .blueprint import AgentSystemBlueprint, BlueprintAgentSpec
 
 
 def _sanitize_filename(name: str) -> str:
@@ -61,21 +61,29 @@ def export_blueprint(blueprint: AgentSystemBlueprint, export_format: ExportForma
             ],
         )
     if export_format == "prompt_pack":
-        files = [
-            ExportFile(
-                filename=f"{_sanitize_filename(agent.name)}.md",
-                content=(
-                    f"# {agent.name}\n\n"
-                    f"Role: {agent.role}\n\n"
-                    f"Goal: {agent.goal}\n\n"
-                    "## Instructions\n\n"
-                    f"{agent.instructions or 'Follow the blueprint workflow and produce the expected output.'}\n"
-                ),
-                mime_type="text/markdown",
+        files: list[ExportFile] = []
+        unsupported_fields: list[str] = []
+        warnings: list[str] = []
+        for agent in blueprint.agents:
+            content, unsupported = _to_prompt_pack_content(agent)
+            if unsupported:
+                unsupported_fields.append(f"agents[{agent.name}].instructions")
+                warnings.append(
+                    f"{agent.name} 的 instructions 过短或与 goal 重复，已补充 outputs/collaboration_rules。"
+                )
+            files.append(
+                ExportFile(
+                    filename=f"{_sanitize_filename(agent.name)}.md",
+                    content=content,
+                    mime_type="text/markdown",
+                )
             )
-            for agent in blueprint.agents
-        ]
-        return ExportResult(format="prompt_pack", files=files)
+        return ExportResult(
+            format="prompt_pack",
+            files=files,
+            warnings=warnings,
+            unsupported_fields=unsupported_fields,
+        )
     return ExportResult(
         format="markdown",
         files=[
@@ -86,6 +94,36 @@ def export_blueprint(blueprint: AgentSystemBlueprint, export_format: ExportForma
             )
         ],
     )
+
+
+def _to_prompt_pack_content(agent: BlueprintAgentSpec) -> tuple[str, bool]:
+    instructions = (agent.instructions or "").strip()
+    goal = (agent.goal or "").strip()
+    unsupported = not instructions or instructions == goal or len(instructions) < 50
+    if unsupported:
+        instructions = (
+            "Follow the blueprint workflow. Use the role, goal, expected outputs, "
+            "and collaboration rules below as the operational instruction set."
+        )
+
+    lines = [
+        f"# {agent.name}",
+        "",
+        f"Role: {agent.role}",
+        "",
+        f"Goal: {agent.goal}",
+        "",
+        "## Instructions",
+        "",
+        instructions,
+    ]
+    if agent.outputs:
+        lines.extend(["", "## Expected Outputs", ""])
+        lines.extend(f"- {output}" for output in agent.outputs)
+    if agent.collaboration_rules:
+        lines.extend(["", "## Collaboration Rules", ""])
+        lines.extend(f"- {rule}" for rule in agent.collaboration_rules)
+    return "\n".join(lines).strip() + "\n", unsupported
 
 
 def _to_markdown(blueprint: AgentSystemBlueprint) -> str:

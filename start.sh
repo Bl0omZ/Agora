@@ -42,6 +42,11 @@ fail() {
 
 trap 'CLEANUP_EXIT_CODE=0; cleanup' SIGINT SIGTERM
 
+if [ ! -f "$ROOT_DIR/.env" ] && [ -f "$ROOT_DIR/.env.example" ]; then
+  echo -e "${CYAN}首次运行，从 .env.example 创建 .env，请编辑填入 API Key…${NC}"
+  cp "$ROOT_DIR/.env.example" "$ROOT_DIR/.env"
+fi
+
 if [ -f "$ROOT_DIR/.env" ]; then
   set -a
   # shellcheck disable=SC1091

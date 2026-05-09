@@ -95,6 +95,10 @@ export function Sidebar({
           )}
         </div>
       )}
+
+      <a className={styles.settingsLink} href="#/settings">
+        设置
+      </a>
     </aside>
   );
 }

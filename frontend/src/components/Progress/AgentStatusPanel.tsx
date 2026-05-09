@@ -1,10 +1,13 @@
 import type { AgentInfo, AgentState } from '../../types';
 import { getRoleStyle } from '../../constants';
+import { displayAgentName } from '../../utils/modelName';
 import styles from './AgentStatusPanel.module.css';
 
 interface AgentStatusPanelProps {
   agents: AgentInfo[];
   agentStates: Record<string, AgentState>;
+  /** 仅在 preset/topic 确认后才展示 agent 列表。 */
+  confirmed?: boolean;
 }
 
 function AgentStatusLabel({ state }: { state: AgentState | undefined }) {
@@ -29,8 +32,15 @@ function AgentStatusLabel({ state }: { state: AgentState | undefined }) {
   return <span className={styles.statusText}>已发言({state.speakCount})</span>;
 }
 
-export function AgentStatusPanel({ agents, agentStates }: AgentStatusPanelProps) {
+export function AgentStatusPanel({ agents, agentStates, confirmed = true }: AgentStatusPanelProps) {
   if (agents.length === 0) return null;
+  if (!confirmed) {
+    return (
+      <div className={styles.panel}>
+        <span className={styles.waitingHint}>等待主持人分配参与者…</span>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.panel}>
@@ -55,7 +65,7 @@ export function AgentStatusPanel({ agents, agentStates }: AgentStatusPanelProps)
             </span>
             <div className={styles.textCol}>
               <div className={styles.row1}>
-                <span className={styles.agentName}>{role.label}</span>
+                <span className={styles.agentName}>{displayAgentName(agent.name)}</span>
                 {isModerator && <span className={styles.badge}>主持人</span>}
               </div>
               <div className={styles.row2}>

@@ -1,5 +1,6 @@
-import type { AgentSystemBlueprint, Message, VotingResult } from '../types';
+import type { AgentSystemBlueprint, Message, VotingResult, DiscussionSummary, AgentParticipant } from '../types';
 import { PHASE_LABELS } from '../constants';
+import { displayAgentName } from './modelName';
 
 export function exportAsMarkdown(
   topic: string,
@@ -19,13 +20,13 @@ export function exportAsMarkdown(
       lines.push('', `## ${PHASE_LABELS[msg.phase] ?? msg.phase}`, '');
       lastPhase = msg.phase;
     }
-    lines.push(`### ${msg.name}`, '', msg.content, '');
+    lines.push(`### ${displayAgentName(msg.name)}`, '', msg.content, '');
   }
 
   if (votingResult) {
     lines.push('## 方案评审', '');
     for (const vote of votingResult.votes) {
-      lines.push(`- **${vote.agent_name}**：${vote.stance}（置信度 ${(vote.confidence * 100).toFixed(0)}%）`);
+      lines.push(`- **${displayAgentName(vote.agent_name)}**：${vote.stance}（置信度 ${(vote.confidence * 100).toFixed(0)}%）`);
       lines.push(`  ${vote.reason}`);
     }
     lines.push('', `**结论**：${votingResult.conclusion}`);
@@ -80,4 +81,36 @@ export async function exportBlueprint(
     anchor.click();
     URL.revokeObjectURL(url);
   }
+}
+
+export async function exportSolution(
+  topic: string,
+  summary: DiscussionSummary | null,
+  votingResult: VotingResult | null,
+): Promise<void> {
+  const participants = (summary?.participants ?? []).map((p: AgentParticipant) => ({
+    name: p.name,
+    model: p.model,
+    role: p.role,
+  }));
+  const res = await fetch('/api/solution/export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      topic,
+      distilled_conclusion: summary?.distilled_conclusion ?? '',
+      voting_conclusion: votingResult?.conclusion ?? '',
+      participants,
+      votes: votingResult?.votes ?? [],
+    }),
+  });
+  if (!res.ok) throw new Error(`导出失败: ${res.status}`);
+  const data = await res.json();
+  const blob = new Blob([data.content], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = data.filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }

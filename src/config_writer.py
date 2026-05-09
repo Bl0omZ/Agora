@@ -116,11 +116,32 @@ def _resolve_env_templates(value: str) -> str:
     return re.sub(r"\$\{(\w+)(?::-(.*?))?\}", _repl, value)
 
 
+def _read_env_from_file(var_name: str) -> str | None:
+    """Fall back to reading a key from the .env file when os.environ doesn't have it."""
+    if not DOTENV_PATH.exists():
+        return None
+    prefix = f"{var_name}="
+    for line in DOTENV_PATH.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith(prefix):
+            value = stripped[len(prefix):].strip()
+            return value or None
+    return None
+
+
+def _get_api_key(env_var_name: str) -> str | None:
+    """Read API key from environment, falling back to direct .env file read."""
+    key = os.environ.get(env_var_name)
+    if key:
+        return key
+    return _read_env_from_file(env_var_name)
+
+
 def _public_models(config: AppConfig) -> list[ModelProfilePublic]:
     public_profiles: list[ModelProfilePublic] = []
     for profile in config.models:
         env_var_name = profile.env_var_name or f"{profile.name.upper()}_API_KEY"
-        key = os.environ.get(env_var_name)
+        key = _get_api_key(env_var_name)
         public_profiles.append(ModelProfilePublic(
             name=profile.name,
             provider=profile.provider,

@@ -56,6 +56,11 @@ export function Welcome({ onStart }: WelcomeProps) {
             开始讨论
           </button>
         </form>
+        <div className={styles.settingsRow}>
+          <a className={styles.settingsLink} href="#/settings">
+            模型与参数设置
+          </a>
+        </div>
       </div>
     </div>
   );

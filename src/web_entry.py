@@ -27,6 +27,11 @@ def _build_log_config() -> dict[str, Any]:
         "level": level,
         "propagate": False,
     }
+    config["loggers"]["watchfiles"] = {
+        "handlers": ["default"],
+        "level": "WARNING",
+        "propagate": False,
+    }
     return config
 
 
