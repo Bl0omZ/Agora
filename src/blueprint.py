@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import re
 import uuid
@@ -80,7 +81,7 @@ class ToolSpec(BaseModel):
 
 
 class EvaluationSpec(BaseModel):
-    criteria: list[str] = Field(default_factory=list)
+    criteria: list[str | dict[str, Any]] = Field(default_factory=list)
     test_cases: list[str] = Field(default_factory=list)
 
 
@@ -111,7 +112,7 @@ class AgentSystemBlueprint(BaseModel):
     created_at: float | None = None
     updated_at: float | None = None
     problem_statement: str
-    target_user: str = ""
+    target_user: str | list[Any] | dict[str, Any] = ""
     use_cases: list[str] = Field(default_factory=list)
     non_goals: list[str] = Field(default_factory=list)
     input_contract: InputContract = Field(default_factory=InputContract)
@@ -164,7 +165,7 @@ def _normalize_blueprint_payload(data: Any) -> dict[str, Any]:
     if normalized.get("status") not in {"draft", "reviewed", "exported"}:
         normalized["status"] = "draft"
 
-    normalized["target_user"] = _compact_string(normalized.get("target_user"))
+    normalized["target_user"] = _normalize_target_user(normalized.get("target_user"))
     normalized["use_cases"] = _normalize_string_list(normalized.get("use_cases"))
     normalized["non_goals"] = _normalize_string_list(normalized.get("non_goals"))
 
@@ -189,6 +190,9 @@ def _normalize_blueprint_payload(data: Any) -> dict[str, Any]:
         output_contract["required_sections"] = _normalize_string_list(
             output_contract.get("required_sections")
         )
+        fmt = output_contract.get("format")
+        if fmt not in ("markdown", "json", "yaml", "mixed"):
+            output_contract["format"] = "markdown"
 
     workflow = normalized.get("workflow")
     if isinstance(workflow, list):
@@ -211,6 +215,12 @@ def _normalize_blueprint_payload(data: Any) -> dict[str, Any]:
             for index, item in enumerate(agents, start=1)
         ]
 
+    workflow = normalized.get("workflow")
+    if not isinstance(workflow, dict):
+        normalized["workflow"] = {"steps": []}
+    if not normalized["workflow"].get("steps") and normalized.get("agents"):
+        normalized["workflow"]["steps"] = _default_workflow_steps(normalized["agents"])
+
     tools = normalized.get("tools")
     if isinstance(tools, list):
         normalized["tools"] = [
@@ -232,7 +242,7 @@ def _normalize_blueprint_payload(data: Any) -> dict[str, Any]:
                 evaluation["test_cases"].extend(
                     f"{key}: {value}" for key, value in targets.items()
                 )
-        evaluation["criteria"] = _normalize_string_list(evaluation.get("criteria"))
+        evaluation["criteria"] = _normalize_criteria_list(evaluation.get("criteria"))
         evaluation["test_cases"] = _normalize_string_list(evaluation.get("test_cases"))
 
     risks = normalized.get("risks")
@@ -255,10 +265,43 @@ def _normalize_blueprint_payload(data: Any) -> dict[str, Any]:
         if generation.get("source") not in {"model", "retry", "deterministic_fallback"}:
             generation["source"] = "model"
         generation["warnings"] = _normalize_string_list(generation.get("warnings"))
+        if generation["source"] in {"model", "retry"}:
+            generation["warnings"] = [
+                warning
+                for warning in generation["warnings"]
+                if not _is_format_validation_warning(warning)
+            ]
     else:
         normalized["generation"] = {"source": "model", "warnings": []}
 
     return normalized
+
+
+def _parse_structured_string(value: str) -> Any:
+    text = value.strip()
+    if not text:
+        return value
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        try:
+            return ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            return value
+
+
+def _normalize_target_user(value: Any) -> Any:
+    if isinstance(value, str):
+        parsed = _parse_structured_string(value)
+        if parsed is not value and isinstance(parsed, (list, dict)):
+            return parsed
+    if isinstance(value, dict):
+        if "primary" in value or "secondary" in value:
+            return _compact_string(value)
+        return value
+    if isinstance(value, list):
+        return value
+    return _compact_string(value)
 
 
 def _compact_string(value: Any) -> str:
@@ -303,6 +346,61 @@ def _normalize_string_list(value: Any) -> list[str]:
         else:
             results.append(str(item))
     return results
+
+
+def _normalize_criteria_list(value: Any) -> list[str | dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        value = [value]
+
+    results: list[str | dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, str):
+            parsed = _parse_structured_string(item)
+            if isinstance(parsed, dict):
+                results.append(parsed)
+            elif isinstance(parsed, list):
+                results.extend(_normalize_criteria_list(parsed))
+            else:
+                results.append(item)
+        elif isinstance(item, dict):
+            results.append(item)
+        else:
+            results.append(str(item))
+    return results
+
+
+def _default_workflow_steps(agents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = []
+    for index, agent in enumerate(agents, start=1):
+        name = str(agent.get("name") or f"Agent {index}")
+        steps.append(
+            {
+                "id": f"step_{index}",
+                "name": f"{name} 执行",
+                "owner_agent": name,
+                "input": "上一步输出或用户输入",
+                "output": "; ".join(_normalize_string_list(agent.get("outputs")))
+                or _compact_string(agent.get("goal"))
+                or "阶段产出",
+                "next": [f"step_{index + 1}"] if index < len(agents) else [],
+                "error_path": "返回错误说明并请求补充信息",
+            }
+        )
+    return steps
+
+
+def _is_format_validation_warning(warning: str) -> bool:
+    return any(
+        marker in warning
+        for marker in (
+            "格式校验",
+            "JSONDecodeError",
+            "ValidationError",
+            "blueprint payload",
+        )
+    )
 
 
 def _normalize_agent_spec(item: Any, index: int) -> dict[str, Any]:
@@ -565,7 +663,7 @@ async def generate_blueprint(
             blueprint = parse_blueprint_response(response.content or "", session_id=session_id)
             if attempt == 1:
                 blueprint.generation.source = "retry"
-                blueprint.generation.warnings = list(warnings)
+                blueprint.generation.warnings = []
             return BlueprintGenerationResult(blueprint=blueprint, warnings=warnings)
         except (json.JSONDecodeError, ValidationError, ValueError) as exc:
             warnings.append(

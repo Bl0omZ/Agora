@@ -1,0 +1,63 @@
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-display);
+  background: var(--bg-hover);
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.tag[data-agent="Host"] {
+  background: var(--role-host-bg);
+  color: var(--role-host-ink);
+}
+
+.tag[data-agent="Architect"] {
+  background: var(--role-architect-bg);
+  color: var(--role-architect-ink);
+}
+
+.tag[data-agent="Pragmatist"] {
+  background: var(--role-pragmatist-bg);
+  color: var(--role-pragmatist-ink);
+}
+
+.tag[data-agent="Challenger"] {
+  background: var(--role-challenger-bg);
+  color: var(--role-challenger-ink);
+}
+
+.tag[data-agent="Synthesizer"] {
+  background: var(--role-synthesizer-bg);
+  color: var(--role-synthesizer-ink);
+}
+
+.tag[data-agent="RequirementsAnalyst"] {
+  background: var(--role-architect-bg);
+  color: var(--role-architect-ink);
+}
+
+.tag[data-agent="DomainExpert"] {
+  background: var(--role-pragmatist-bg);
+  color: var(--role-pragmatist-ink);
+}
+
+.tag[data-agent="Evaluator"] {
+  background: var(--role-host-bg);
+  color: var(--role-host-ink);
+}
+
+.tag[data-agent="ProcessDesigner"] {
+  background: var(--role-synthesizer-bg);
+  color: var(--role-synthesizer-ink);
+}
+
+.tag[data-agent="RootCauseAnalyst"] {
+  background: var(--role-challenger-bg);
+  color: var(--role-challenger-ink);
+}

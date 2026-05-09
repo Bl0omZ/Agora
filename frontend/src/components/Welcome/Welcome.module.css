@@ -85,6 +85,39 @@
 
 .button:hover { opacity: 0.9; }
 
+.settingsRow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.settingsLink {
+  font-size: 14px;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid var(--accent);
+  transition: opacity 0.15s;
+}
+
+.settingsLink:hover { opacity: 0.8; }
+
+.settingsBtn {
+  padding: 8px 20px;
+  background: var(--accent);
+  color: var(--ink-inverse);
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+
+.settingsBtn:hover { opacity: 0.85; }
+
 @media (max-width: 720px) {
   .welcome {
     align-items: flex-start;

@@ -27,6 +27,7 @@ export interface Vote {
   stance: string;
   reason: string;
   confidence: number;
+  source?: string;
 }
 
 export interface VotingResult {
@@ -120,6 +121,7 @@ export interface SessionData {
   votingResult: VotingResult | null;
   blueprint?: AgentSystemBlueprint | null;
   blueprintWarnings?: string[];
+  discussionSummary?: DiscussionSummary | null;
   logs: PipelineLog[];
   savedPath: string | null;
   createdAt: number;
@@ -305,4 +307,151 @@ export interface BrainstormFailureState {
   kind: BrainstormFailureKind;
   /** UI 上展示的简短文案；不传时由组件按 kind 给默认值。 */
   message?: string;
+}
+
+// =============================================================================
+// Agent 配置设置页（Settings）— 任务 1B
+// =============================================================================
+
+/**
+ * Model Registry 中一条模型记录（公开视图）。
+ *
+ * 后端使用 ModelProfilePublic 序列化；不含 api_key/secret/token。
+ * env_var_name 是裸名（如 "MIMO_API_KEY"），不是 yaml 里的模板字符串 "${MIMO_API_KEY:-}"（决议 Q1）。
+ */
+export interface ModelProfile {
+  name: string;
+  provider: string;
+  base_url: string;
+  /** 该 provider 下的模型 ID 列表（如 ["GLM-5.1", "Kimi-K2.6"]）。 */
+  models: string[];
+  /** 裸 env 变量名，仅展示用；前端不能拿到真实 key 值。 */
+  env_var_name: string;
+  /** 脱敏后的 key 预览，如 sk-a***...b3d；后端未配置对应环境变量时为空。 */
+  key_masked?: string;
+}
+
+/**
+ * Agents Tab 中编辑的草稿。后端使用 AgentConfigPublic 视图。
+ *
+ * Model Registry ontology 双轨规则（决议 Q2/Q5）：
+ * - model 命中 registry → 后端 PUT 时自动清空 inline base_url/api_key 字段，响应携带 sanitized_fields
+ * - model 不命中 → 走旧路径，行为不变
+ */
+export interface AgentDraft {
+  name: string;
+  description: string;
+  /** 引用 ModelProfile.name；旧 agent 也可填裸 model_id 字符串走旧路径。 */
+  model: string;
+  is_moderator: boolean;
+  final_only: boolean;
+}
+
+/**
+ * Presets Tab 中查看/复制的 preset 草稿。
+ */
+export interface PresetDraft {
+  name: string;
+  label: string;
+  description: string;
+  agents: Array<{ name: string; description: string; model?: string }>;
+}
+
+/**
+ * Runtime 参数聚合视图（决议 Q5）：yaml schema 不动，前端聚合 4 字段，后端拆分写回。
+ */
+export interface RuntimeParams {
+  max_rounds: number;
+  brainstorm_enabled: boolean;
+  voting_timeout_s: number;
+  /** Synthesizer 调用模型；null = 沿用 discussion 默认；非 null 必须 ∈ ModelProfile.name 集合。 */
+  summary_model: string | null;
+}
+
+/** Config API GET /api/config 完整响应（脱敏视图）。 */
+export interface AppConfigPublic {
+  /** 后端 schema 上为可选；缺省视作空数组（决议 Q2：不种子化 registry）。 */
+  models?: ModelProfile[];
+  agents: AgentDraft[];
+  /** 后端 schema 上为可选；缺省视作空数组。 */
+  presets?: PresetDraft[];
+  runtime: RuntimeParams;
+}
+
+/** Config PUT 时的服务端净化报告（决议 Q5）。 */
+export interface ConfigSanitizedFields {
+  agent_name: string;
+  /** 被清空的 inline 字段名（如 base_url、api_key）。 */
+  sanitized_fields: string[];
+}
+
+/** PUT 失败的错误响应。409=lost-update；422=schema 校验失败。 */
+export interface ConfigPutError {
+  status: 409 | 422;
+  detail: string;
+  /** 422 时携带，指出非法字段。 */
+  field?: string;
+}
+
+// =============================================================================
+// 事后总结仪表盘（Discussion Summary）— 任务 2B
+// =============================================================================
+
+/**
+ * Synthesizer 提取的单条关键论点（决议 Q6）。
+ */
+export interface KeyPoint {
+  agent_name: string;
+  text: string;
+}
+
+/**
+ * 事后总结仪表盘上一个 agent 的卡片数据（决议 Q6：不含 stance/confidence/source）。
+ *
+ * stance/confidence/source 由前端在 voting 阶段完成后 merge votingResult.votes by name 注入，
+ * 不在 Synthesizer 输出内。
+ */
+export interface AgentParticipant {
+  name: string;
+  role: string;
+  /** 底层 model_id 字符串，用于头像横条角标展示。 */
+  model: string;
+  is_moderator: boolean;
+  message_count: number;
+  /** Synthesizer 为该 agent 提取的 3-5 条关键论点。 */
+  key_points: string[];
+}
+
+/** Synthesizer 两段式降级失败时的标记（plan §5 R7）。 */
+export type DegradedReason = 'json_parse_failed' | 'synthesis_truncated';
+
+/**
+ * 事后总结仪表盘的核心数据结构。对应 WS 事件 `discussion_summary`（决议 Q6）。
+ */
+export interface DiscussionSummary {
+  /** 后端默认 2；缺省时前端视作 2。 */
+  schema_version?: number;
+  participants: AgentParticipant[];
+  /** ≤300 字提炼结论；degraded=true 时 ≤500 字截断 markdown。 */
+  distilled_conclusion: string;
+  /** true = Synthesizer JSON 解析失败，已走两段式降级。前端展示 DegradedBanner（默认 false）。 */
+  degraded?: boolean;
+  degraded_reason?: DegradedReason | null;
+}
+
+/**
+ * Voting 阶段后注入的 stance/confidence/source 增量信息。
+ *
+ * 前端按 agent name 匹配 votingResult.votes，叠加到 AgentParticipant 卡片上。
+ * stance: support | oppose | neutral | timeout | error
+ * source: valid | timeout | error（决议 Q3：confidence 仍是 float 默认 0.0，仅作展示数值）
+ */
+export interface AgentVoteOverlay {
+  agent_name: string;
+  stance: 'support' | 'oppose' | 'neutral' | 'timeout' | 'error';
+  /** 来自 VoteResult.confidence；timeout/error 通常为 0.0（仅展示用，不做判据）。 */
+  confidence: number;
+  /** 来自 VoteResult.source；判定有效性的唯一字段。 */
+  source: 'valid' | 'timeout' | 'error';
+  reason: string;
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
 import json
 import logging
 import re
@@ -15,7 +16,7 @@ from typing import Any
 from fastapi import Body, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from semantic_kernel.contents import AuthorRole, ChatHistory, ChatMessageContent
 
@@ -1774,10 +1775,104 @@ async def get_report(filename: str):
     return PlainTextResponse(content)
 
 
+def _save_export_files(result) -> None:
+    """Write exported blueprint files to the exports/ directory."""
+    exports_dir = Path(__file__).resolve().parents[1] / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+    for f in result.files:
+        safe_name = Path(f.filename).name or "blueprint"
+        (exports_dir / safe_name).write_text(f.content, encoding="utf-8")
+    logger.info("blueprint exported to %s (%d files)", exports_dir, len(result.files))
+
+
 @app.post("/api/blueprint/export")
 async def export_blueprint_endpoint(request: BlueprintExportRequest):
     result = export_blueprint(request.blueprint, request.format)
+    _save_export_files(result)
     return result.model_dump(mode="json")
+
+
+class SolutionExportRequest(BaseModel):
+    topic: str
+    distilled_conclusion: str = ""
+    voting_conclusion: str = ""
+    participants: list[dict[str, Any]] = Field(default_factory=list)
+    votes: list[dict[str, Any]] = Field(default_factory=list)
+
+
+@app.post("/api/solution/export")
+async def export_solution_endpoint(request: SolutionExportRequest):
+    """Generate a clean markdown solution report and save to exports/."""
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    lines = [
+        f"# 讨论结论：{request.topic}",
+        "",
+        f"> 生成时间：{now}",
+        f"> 结论来源：Synthesizer（总结者）",
+        "",
+        "---",
+        "",
+        "## 参与方",
+        "",
+    ]
+    for p in request.participants:
+        name = p.get("name", "")
+        model = p.get("model", "")
+        role = p.get("role", "")
+        lines.append(f"- **{name}**（{role}）— `{model}`")
+    lines.append("")
+
+    if request.distilled_conclusion:
+        lines.extend([
+            "---",
+            "",
+            "## 讨论总结",
+            "",
+            request.distilled_conclusion,
+            "",
+        ])
+
+    if request.votes:
+        lines.extend([
+            "---",
+            "",
+            "## 投票结果",
+            "",
+            "| 参与者 | 立场 | 置信度 | 理由 |",
+            "|--------|------|--------|------|",
+        ])
+        for v in request.votes:
+            stance = v.get("stance", "")
+            confidence = f"{float(v.get('confidence', 0)) * 100:.0f}%"
+            reason = str(v.get("reason", ""))[:80]
+            lines.append(f"| {v.get('agent_name', '')} | {stance} | {confidence} | {reason} |")
+        lines.append("")
+
+    if request.voting_conclusion:
+        lines.extend([
+            "---",
+            "",
+            "## 最终结论",
+            "",
+            request.voting_conclusion,
+            "",
+        ])
+
+    content = "\n".join(lines)
+    safe_topic = re.sub(r"[/\\:*?\"<>|]", "_", request.topic)[:60]
+    filename = f"{safe_topic}-方案报告.md"
+
+    exports_dir = Path(__file__).resolve().parents[1] / "exports"
+    exports_dir.mkdir(parents=True, exist_ok=True)
+    (exports_dir / filename).write_text(content, encoding="utf-8")
+    logger.info("solution exported to %s", exports_dir / filename)
+
+    return {
+        "ok": True,
+        "filename": filename,
+        "path": str(exports_dir / filename),
+        "content": content,
+    }
 
 
 @app.post('/api/sessions')
