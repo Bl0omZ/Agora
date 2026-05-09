@@ -16,6 +16,12 @@
 - **报告归档**：经用户确认后保存为结构化 markdown 报告，沉淀讨论资产
 - **Web UI**：实时 timeline 展示发言、流式打字、投票卡、报告管理
 
+## Screenshots
+
+| 主界面 | 模型配置 | Presets |
+|--------|---------|---------|
+| ![index](img/index.png) | ![model](img/model.png) | ![presets](img/presets.png) |
+
 ## Installation
 
 ### Prerequisites

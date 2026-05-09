@@ -33,3 +33,4 @@ CLAUDE.md
 AGENTS.md
 KNOWN_ISSUES.md
 *.log
+exports/
