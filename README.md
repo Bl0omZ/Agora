@@ -18,13 +18,11 @@
 
 ## Screenshots
 
-<p align="center">
-  <img src="img/index.png" width="48%" alt="主界面" />
-  <img src="img/model.png" width="48%" alt="模型配置" />
-</p>
-<p align="center">
-  <img src="img/presets.png" width="48%" alt="Presets" />
-</p>
+![主界面](img/index.png)
+
+![模型配置](img/model.png)
+
+![Presets](img/presets.png)
 
 ## Installation
 
